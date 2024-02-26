@@ -10,7 +10,7 @@ class BeamKeypoints(Enum):
     X4 = 6
     Y4 = 7
 
-class ProbeType(Enum):
+class Probe(Enum):
     LINEAR = 0
     CURVILINEAR = 1
     PHASED = 2
