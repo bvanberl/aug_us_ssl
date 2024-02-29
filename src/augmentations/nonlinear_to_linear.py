@@ -190,15 +190,16 @@ class NonlinearToLinear(nn.Module):
 
         # Set pixels within original beam ROI but outside new ROI to black
         if not self.square_roi:
-            orig_mask = (
-                    (yy >= top_bound)
-                    & (yy <= bottom_bound)
-                    & (xx >= left_bound)
-                    & (xx <= right_bound)
-            ).unsqueeze(0)
-            orig_mask = orig_mask.repeat(3, 1, 1)
-            new_image = torch.where(orig_mask, mapped_image, image)
-
+            new_image = overlay_region_on_image(
+                image,
+                mapped_image,
+                xx,
+                yy,
+                top_bound,
+                bottom_bound,
+                left_bound,
+                right_bound
+            )
         else:
             new_image = tvf.resize(mapped_image, [h, h])
 

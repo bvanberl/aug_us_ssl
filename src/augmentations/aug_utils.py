@@ -81,3 +81,29 @@ def get_angle_of_intersection(
 
     cos_sim = torch.dot(v1, v2) / (torch.norm(v1) * torch.norm(v2))
     return torch.acos(torch.clamp(cos_sim, min=-1.0, max=1.0))
+
+
+def overlay_region_on_image(image, new_image, xx, yy, top, bottom, left, right):
+    """Pastes a region in `new_image` onto `image`
+
+    Args:
+        image: Image onto which to paste (c, h, w)
+        new_image: Image containing region to paste (c, h, w)
+        xx: x-coordinate map (h, w)
+        yy: y-coordinate map (h, w)
+        top: Top bound of region
+        bottom: Bottom bound of region
+        left: Left bound of region
+        right: Right bound of region
+
+    Returns: Original image with region from `new_image` pasted onto it
+
+    """
+    orig_mask = (
+            (yy >= top)
+            & (yy <= bottom)
+            & (xx >= left)
+            & (xx <= right)
+    ).unsqueeze(0)
+    orig_mask = orig_mask.repeat(3, 1, 1)
+    return torch.where(orig_mask, new_image, image)
