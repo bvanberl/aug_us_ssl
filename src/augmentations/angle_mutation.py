@@ -111,8 +111,6 @@ class ConvexAngleMutation(nn.Module):
         rad_ratio = rad / rad_pr
         theta_ratio = theta / new_theta
 
-        itn_to_top = y1 - y_itn
-
         if probe == Probe.CURVILINEAR.value:
             rad_ratio = (yy - y_itn) * torch.cos(new_theta / 2.) / torch.cos(theta / 2.) / (yy - new_y_itn)
         else:
@@ -123,6 +121,7 @@ class ConvexAngleMutation(nn.Module):
 
         new_xx = x_itn + r_pr * rad_ratio * torch.sin(theta_ratio * phi_pr)
         new_yy = y_itn + r_pr * rad_ratio * torch.cos(theta_ratio * phi_pr)
+        new_yy = new_yy * h / new_yy[-1, x_itn.int()]
 
         new_yy = new_yy / h * 2. - 1.
         new_xx = new_xx / w * 2. - 1.
