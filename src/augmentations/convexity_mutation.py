@@ -1,12 +1,12 @@
 import torch
-from torch import nn
+from torch import nn, Tensor
 from torchvision.transforms.v2 import functional as tvf, Transform
 from torchvision.transforms import InterpolationMode as im
 
 from src.constants import BeamKeypoints, Probe
 from src.augmentations.aug_utils import *
 
-class ConvexAngleMutation(nn.Module):
+class ConvexityMutation(nn.Module):
     """Preprocessing layer that warps convex ultrasound images.
 
     This transformation distorts ultrasound images such that
@@ -21,7 +21,8 @@ class ConvexAngleMutation(nn.Module):
             self,
             square_roi: bool = False,
             min_top_width: float = 0.,
-            max_top_width: float = 0.8
+            max_top_width: float = 0.5,
+            point_thresh: float = 1.
     ):
         """Initializes the NonLinearToLinear layer.
 
@@ -32,20 +33,23 @@ class ConvexAngleMutation(nn.Module):
                 beam width, as a fraction of original beam's width
             max_width_frac: The maximum possible width of the output image's
                 beam width, as a fraction of original beam's width
+            point_thresh: The maximum value for `|x2-x1|` that constitutes a
+                phased clip with a pointed top
         """
-        super(ConvexAngleMutation, self).__init__()
+        super(ConvexityMutation, self).__init__()
         self.square_roi = square_roi
         self.min_top_width = min_top_width
         self.max_top_width = max_top_width
+        self.point_thresh = point_thresh
 
     def forward(
             self,
-            image: torch.Tensor,
-            label: torch.Tensor,
-            keypoints: torch.Tensor,
-            probe: torch.Tensor,
+            image: Tensor,
+            label: Tensor,
+            keypoints: Tensor,
+            probe: Tensor,
             **kwargs
-    ) -> (torch.Tensor, torch.Tensor, torch.Tensor):
+    ) -> (Tensor, Tensor, Tensor, Tensor):
         """Applies the probe type transformation to the image
 
         Determines a coordinate map that routes pixel locations
@@ -71,8 +75,14 @@ class ConvexAngleMutation(nn.Module):
         x1, y1, x2, y2, x3, y3, x4, y4 = keypoints
         c, h, w = image.shape
 
-        # Get point of intersection of left and right beam bounds
+        # If phased array with point at top, marginally move top keypoints laterally
+        if torch.abs(x2 - x1) < self.point_thresh and probe == Probe.PHASED.value:
+            x1 -= 0.5
+            x2 += 0.5
+
+        # Determine point and angle of intersection of lateral beam bounds
         x_itn, y_itn = get_point_of_intersection(*keypoints)
+        theta = get_angle_of_intersection(x3, y3, x4, y4, x_itn, y_itn)
 
         # Randomly sample the width fraction of the original beam
         top_width = self.min_top_width + \
@@ -81,48 +91,40 @@ class ConvexAngleMutation(nn.Module):
         new_x1 = x_itn - (x_itn - x1) * top_width_scale
         new_x2 = x_itn + (x2 - x_itn) * top_width_scale
 
-        # Determine new keypoints
-        new_keypoints = torch.stack([
-            new_x1,
-            y1,
-            new_x2,
-            y2,
-            x3,
-            y3,
-            x4,
-            y4
-        ])
-
         y_coords = torch.linspace(0, h - 1, h)
         x_coords = torch.linspace(0, w - 1, w)
         yy, xx = torch.meshgrid(y_coords, x_coords, indexing='ij')
 
-        # Determine point and angle of intersection of lateral beam bounds
-        theta = get_angle_of_intersection(x3, y3, x4, y4, x_itn, y_itn)
-
+        # Determine point and angle of intersection of new lateral beam bounds
         new_x_itn, new_y_itn = get_point_of_intersection(new_x1, y1, new_x2, y2, x3, y3, x4, y4)
         new_theta = get_angle_of_intersection(x3, y3, x4, y4, new_x_itn, new_y_itn)
 
-        phi_pr = torch.atan2(xx - new_x_itn, yy - new_y_itn)
-        r_pr = torch.sqrt((new_x_itn - xx)**2 + (new_y_itn - yy)**2)
-        rad_pr = torch.sqrt((new_x_itn - x3) ** 2 + (new_y_itn - y3) ** 2)
-        rad = torch.sqrt((x_itn - x3) ** 2 + (y_itn - y3) ** 2)
+        # Calculate polar coordinates with respect to new beam shape
+        new_phi = torch.atan2(xx - new_x_itn, yy - new_y_itn)
+        new_r = torch.sqrt((new_x_itn - xx)**2 + (new_y_itn - yy)**2)
 
-        rad_ratio = rad / rad_pr
+        # Determine angular and radius ratios for old:new beam
         theta_ratio = theta / new_theta
+        rad_ratio = (yy - y_itn) * torch.cos(new_theta / 2.) / torch.cos(theta / 2.) / (yy - new_y_itn)
 
-        if probe == Probe.CURVILINEAR.value:
-            rad_ratio = (yy - y_itn) * torch.cos(new_theta / 2.) / torch.cos(theta / 2.) / (yy - new_y_itn)
+        # Compute mapping from new image to old image coordinates
+        new_xx = x_itn + new_r * rad_ratio * torch.sin(theta_ratio * new_phi)
+        new_yy = y_itn + new_r * rad_ratio * torch.cos(theta_ratio * new_phi)
+
+        # If square ROI, beam was not initially circular.
+        # Resize so that bottom of beam coincides with bottom of image.
+        if self.square_roi:
+            vertical_adjust = (h - 1) / new_yy[-1, x_itn.int()]
+            new_yy = new_yy * vertical_adjust
+            new_y3 = y3 / vertical_adjust
+            new_y4 = y4 / vertical_adjust
+            horiz_adjust = w / (new_xx[new_y3.int(), w - 1] - new_xx[new_y3.int(), new_x_itn.int()]) / 2.
+            new_xx = (new_xx - new_x_itn) * horiz_adjust + new_x_itn
         else:
-            rad_ratio = torch.concat([
-                (yy[:y3.int()] - y_itn) * torch.cos(new_theta / 2.) / torch.cos(theta / 2.) / (yy[:y3.int()] - new_y_itn),
-                torch.ones((h - y3.int(), w)) * rad_ratio
-            ], dim=0)
+            new_y3 = y3
+            new_y4 = y4
 
-        new_xx = x_itn + r_pr * rad_ratio * torch.sin(theta_ratio * phi_pr)
-        new_yy = y_itn + r_pr * rad_ratio * torch.cos(theta_ratio * phi_pr)
-        new_yy = new_yy * h / new_yy[-1, x_itn.int()]
-
+        # Normalize the coordinate map
         new_yy = new_yy / h * 2. - 1.
         new_xx = new_xx / w * 2. - 1.
         adjusted_grid = torch.stack([new_xx, new_yy], dim=-1)
@@ -130,9 +132,17 @@ class ConvexAngleMutation(nn.Module):
         # Construct new image using values from old image
         new_image = nn.functional.grid_sample(image.unsqueeze(0).float(), adjusted_grid.unsqueeze(0)).squeeze(0)
 
-        # Set pixels within original beam ROI but outside new ROI to black
-        if not self.square_roi:
-            new_image = overlay_region_on_image(image, new_image, xx, yy, y1, rad_pr, x3, x4)
+        # Determine new keypoints
+        new_keypoints = torch.stack([
+            new_x1,
+            y1,
+            new_x2,
+            y2,
+            x3,
+            new_y3,
+            x4,
+            new_y4
+        ])
 
         return new_image, label, new_keypoints, probe
 

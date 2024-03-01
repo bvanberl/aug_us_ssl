@@ -1,5 +1,5 @@
 import torch
-from torch import nn
+from torch import nn, Tensor
 from torchvision.transforms.v2 import functional as tvf, Transform
 from torchvision.transforms import InterpolationMode as im
 
@@ -39,12 +39,12 @@ class NonlinearToLinear(nn.Module):
 
     def forward(
             self,
-            image: torch.Tensor,
-            label: torch.Tensor,
-            keypoints: torch.Tensor,
-            probe: torch.Tensor,
+            image: Tensor,
+            label: Tensor,
+            keypoints: Tensor,
+            probe: Tensor,
             **kwargs
-    ) -> (torch.Tensor, torch.Tensor, torch.Tensor):
+    ) -> (Tensor, Tensor, Tensor, Tensor):
         """Applies the probe type transformation to the image
 
         Determines a coordinate map that routes pixel locations
@@ -61,7 +61,7 @@ class NonlinearToLinear(nn.Module):
             probe: Probe type of the image
 
         Returns:
-            augmented image, transformed keypoints, new probe type (linear)
+            augmented image, label, transformed keypoints, new probe type (linear)
         """
 
         x1, y1, x2, y2, x3, y3, x4, y4 = keypoints
