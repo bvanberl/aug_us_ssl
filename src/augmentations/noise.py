@@ -43,26 +43,28 @@ class SpeckleNoise(nn.Module):
             image: Tensor,
             label: Tensor,
             keypoints: Tensor,
+            mask: Tensor,
             probe: Tensor,
             **kwargs
     ) -> (Tensor, Tensor, Tensor, Tensor):
-        """Applies the probe type transformation to the image
+        """Transformation that simulates speckle noise
 
-        Determines a coordinate map that routes pixel locations
-        in the original image to the new, distorted image, depending
-        on the original probe type. Constructs the distorted beam
-        and draws it onto the original image in place of the old beam.
-        Applies bilinear interpolation to the new image.
+        Simulates the addition of speckle noise to the input image.
+        Following the method from https://ieeexplore.ieee.org/document/7967056,
+        images are interpolated from sampled points in the image that have been
+        perturbed with multiple rounds of additive noise from a circular Gaussian,
+        mimicking noise from multiple incoherent phasors.
 
         Args:
             image: 3D Image tensor, with shape (c, h, w)
             label: Label for the image, which is unaltered
             keypoints: 1D tensor with shape (8,) containing beam mask keypoints
                        with format [x1, y1, x2, y2, x3, y3, x4, y4]
+            mask: Beam mask, with shape (1, h, w)
             probe: Probe type of the image
 
         Returns:
-            augmented image, transformed keypoints, new probe type (linear)
+            augmented image, label, keypoints, mask, probe type
         """
 
         x1, y1, x2, y2, x3, y3, x4, y4 = keypoints
@@ -123,5 +125,122 @@ class SpeckleNoise(nn.Module):
             new_image = tvf.resize(new_image, [h, h])
 
         new_image = torch.clamp(new_image, 0., 255.)
-        return new_image, label, keypoints, probe
+        return new_image, label, keypoints, mask, probe
+
+
+class GaussianNoise(nn.Module):
+    """Transformation that adds Gaussian noise to ultrasound image
+        """
+
+    def __init__(
+            self,
+            min_sigma: float = 0.5,
+            max_sigma: float = 3.0,
+    ):
+        """Initializes the GaussianNoise layer.
+
+        Args:
+            min_sigma: Minimum std deviation of the Gaussian
+            max_sigma: Maximum std deviation of the Gaussian
+        """
+        super(GaussianNoise, self).__init__()
+        self.min_sigma = min_sigma
+        self.max_sigma = max_sigma
+
+    def forward(
+            self,
+            image: Tensor,
+            label: Tensor,
+            keypoints: Tensor,
+            mask: Tensor,
+            probe: Tensor,
+            **kwargs
+    ) -> (Tensor, Tensor, Tensor, Tensor):
+        """Samples Gaussian noise and adds it to each pixel constituting
+            the ultrasound beam.
+
+            Args:
+                image: 3D Image tensor, with shape (c, h, w)
+                label: Label for the image, which is unaltered
+                keypoints: 1D tensor with shape (8,) containing beam mask keypoints
+                           with format [x1, y1, x2, y2, x3, y3, x4, y4]
+                mask: Beam mask, with shape (1, h, w)
+                probe: Probe type of the image
+
+            Returns:
+                augmented image, label, keypoints, mask, probe type
+        """
+
+        sigma = self.min_sigma + torch.rand(()) * (self.max_sigma - self.min_sigma)
+        noise = sigma * torch.randn_like(mask)
+        noise = noise * mask
+
+        new_image = image + noise
+        new_image = torch.clamp(new_image, 0., 255.)
+        return new_image, label, keypoints, mask, probe
+
+
+class SaltAndPepperNoise(nn.Module):
+    """Transformation that adds salt & pepper noise to ultrasound image
+        """
+
+    def __init__(
+            self,
+            min_salt_frac: float = 0.005,
+            max_salt_frac: float = 0.01,
+            min_pepper_frac: float = 0.005,
+            max_pepper_frac: float = 0.01,
+    ):
+        """Initializes the SaltAndPepper noise layer.
+
+        Args:
+            min_sigma: Minimum std deviation of the Gaussian
+            max_sigma: Maximum std deviation of the Gaussian
+        """
+        super(SaltAndPepperNoise, self).__init__()
+        self.min_salt_frac = min_salt_frac
+        self.max_salt_frac = max_salt_frac
+        self.min_pepper_frac = min_pepper_frac
+        self.max_pepper_frac = max_pepper_frac
+
+    def forward(
+            self,
+            image: Tensor,
+            label: Tensor,
+            keypoints: Tensor,
+            mask: Tensor,
+            probe: Tensor,
+            **kwargs
+    ) -> (Tensor, Tensor, Tensor, Tensor):
+        """Samples salt & pepper noise
+
+            Applies salt and pepper noise at random locations in the image.
+            Salt noise consists of setting the pixel intensity to white
+            and pepper noise consists of setting the intensity to black.
+
+            Args:
+                image: 3D Image tensor, with shape (c, h, w)
+                label: Label for the image, which is unaltered
+                keypoints: 1D tensor with shape (8,) containing beam mask keypoints
+                           with format [x1, y1, x2, y2, x3, y3, x4, y4]
+                mask: Beam mask, with shape (1, h, w)
+                probe: Probe type of the image
+
+            Returns:
+                augmented image, label, keypoints, mask, probe type
+        """
+        c, h, w = image.shape
+        n_salt = int((self.min_salt_frac + torch.rand(()) * (self.max_salt_frac - self.min_salt_frac)) * h * w)
+        n_pepper = int((self.min_pepper_frac + torch.rand(()) * (self.max_pepper_frac - self.min_pepper_frac)) * h * w)
+
+        # Add salt noise
+        salt_locs = torch.randint(0, w * h - 1, size=(n_salt,))
+        image[:, salt_locs // w, salt_locs % w] = 255.
+
+        # Add pepper noise
+        pepper_locs = torch.randint(0, w * h - 1, size=(n_pepper,))
+        image[:, pepper_locs // w, pepper_locs % w] = 0.
+
+        new_image = image * mask
+        return new_image, label, keypoints, mask, probe
 

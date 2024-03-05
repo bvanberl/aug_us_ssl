@@ -42,6 +42,7 @@ class NonlinearToLinear(nn.Module):
             image: Tensor,
             label: Tensor,
             keypoints: Tensor,
+            mask: Tensor,
             probe: Tensor,
             **kwargs
     ) -> (Tensor, Tensor, Tensor, Tensor):
@@ -58,6 +59,7 @@ class NonlinearToLinear(nn.Module):
             label: Label for the image, which is unaltered
             keypoints: 1D tensor with shape (8,) containing beam mask keypoints
                        with format [x1, y1, x2, y2, x3, y3, x4, y4]
+            mask: Beam mask, with shape (1, h, w)
             probe: Probe type of the image
 
         Returns:
@@ -180,13 +182,13 @@ class NonlinearToLinear(nn.Module):
         mapped_image = nn.functional.grid_sample(image.unsqueeze(0).float(), flow_field.unsqueeze(0)).squeeze(0)
 
         # Update beam pixels in original image with distorted linear beam
-        mask = (
+        new_mask = (
             (yy >= top_bound)
             & (yy <= bottom_bound)
             & (xx >= new_left_bound)
             & (xx <= new_right_bound)
         ).float().unsqueeze(0)
-        mapped_image = mask * mapped_image
+        mapped_image = new_mask * mapped_image
 
         # Set pixels within original beam ROI but outside new ROI to black
         if not self.square_roi:
@@ -203,7 +205,7 @@ class NonlinearToLinear(nn.Module):
         else:
             new_image = tvf.resize(mapped_image, [h, h])
 
-        return new_image, label, new_keypoints, Probe.LINEAR.value
+        return new_image, label, new_keypoints, new_mask, Probe.LINEAR.value
 
 
 
