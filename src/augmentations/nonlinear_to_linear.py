@@ -66,6 +66,9 @@ class NonlinearToLinear(nn.Module):
             augmented image, label, transformed keypoints, new probe type (linear)
         """
 
+        if probe == Probe.LINEAR.value:
+            return image, label, keypoints, mask, probe
+
         x1, y1, x2, y2, x3, y3, x4, y4 = keypoints
         c, h, w = image.shape
 
@@ -204,6 +207,7 @@ class NonlinearToLinear(nn.Module):
             )
         else:
             new_image = tvf.resize(mapped_image, [h, h])
+            new_mask = tvf.resize(new_mask, [h, h])
 
         return new_image, label, new_keypoints, new_mask, Probe.LINEAR.value
 

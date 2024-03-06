@@ -72,7 +72,7 @@ class ConvexityMutation(nn.Module):
         """
 
         if probe == Probe.LINEAR.value:
-            return image, label, keypoints, probe
+            return image, label, keypoints, mask, probe
 
         x1, y1, x2, y2, x3, y3, x4, y4 = keypoints
         c, h, w = image.shape
