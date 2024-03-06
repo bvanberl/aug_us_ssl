@@ -2,6 +2,8 @@ from typing import Tuple
 
 import torch
 
+from src.constants import Probe
+
 def get_point_of_intersection(
     x1: float,
     y1: float,
@@ -107,3 +109,29 @@ def overlay_region_on_image(image, new_image, xx, yy, top, bottom, left, right):
     ).unsqueeze(0)
     orig_mask = orig_mask.repeat(3, 1, 1)
     return torch.where(orig_mask, new_image, image)
+
+def overlay_region_on_image(image, new_image, xx, yy, top, bottom, left, right):
+    """Pastes a region in `new_image` onto `image`
+
+    Args:
+        image: Image onto which to paste (c, h, w)
+        new_image: Image containing region to paste (c, h, w)
+        xx: x-coordinate map (h, w)
+        yy: y-coordinate map (h, w)
+        top: Top bound of region
+        bottom: Bottom bound of region
+        left: Left bound of region
+        right: Right bound of region
+
+    Returns: Original image with region from `new_image` pasted onto it
+
+    """
+    orig_mask = (
+            (yy >= top)
+            & (yy <= bottom)
+            & (xx >= left)
+            & (xx <= right)
+    ).unsqueeze(0)
+    orig_mask = orig_mask.repeat(3, 1, 1)
+    return torch.where(orig_mask, new_image, image)
+

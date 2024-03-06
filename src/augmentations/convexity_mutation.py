@@ -47,6 +47,7 @@ class ConvexityMutation(nn.Module):
             image: Tensor,
             label: Tensor,
             keypoints: Tensor,
+            mask: Tensor,
             probe: Tensor,
             **kwargs
     ) -> (Tensor, Tensor, Tensor, Tensor):
@@ -63,6 +64,7 @@ class ConvexityMutation(nn.Module):
             label: Label for the image, which is unaltered
             keypoints: 1D tensor with shape (8,) containing beam mask keypoints
                        with format [x1, y1, x2, y2, x3, y3, x4, y4]
+            mask: Beam mask, with shape (1, h, w)
             probe: Probe type of the image
 
         Returns:
@@ -70,7 +72,7 @@ class ConvexityMutation(nn.Module):
         """
 
         if probe == Probe.LINEAR.value:
-            return image, label, keypoints, probe
+            return image, label, keypoints, mask, probe
 
         x1, y1, x2, y2, x3, y3, x4, y4 = keypoints
         c, h, w = image.shape
@@ -131,6 +133,7 @@ class ConvexityMutation(nn.Module):
 
         # Construct new image using values from old image
         new_image = nn.functional.grid_sample(image.unsqueeze(0).float(), adjusted_grid.unsqueeze(0)).squeeze(0)
+        new_mask = nn.functional.grid_sample(mask.unsqueeze(0).float(), adjusted_grid.unsqueeze(0)).squeeze(0)
 
         # Determine new keypoints
         new_keypoints = torch.stack([
@@ -144,5 +147,5 @@ class ConvexityMutation(nn.Module):
             new_y4
         ])
 
-        return new_image, label, new_keypoints, probe
+        return new_image, label, new_keypoints, new_mask, probe
 
