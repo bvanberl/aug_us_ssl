@@ -1,4 +1,4 @@
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 import numpy as np
 import numpy.typing as npt
@@ -7,30 +7,41 @@ import cv2
 from src.constants import Probe
 
 
-def get_beam_mask(h, w, keypoints, probe):
+def get_beam_mask(h, w, keypoints, probe, square_roi: bool = False):
+    """Produce an ultrasound beam mask
+
+    Given a set of keypoints indicating beam corners,
+    constructs and fills in a shape constituting an
+    ultrasound beam.
+    Args:
+        h: Mask height
+        w: Mask width
+        keypoints: Beam keypoints, in format [x1, y1, x2, y2, x3, y3, x4, y4]
+        probe: Probe type
+        square_roi: If True, images are minimal crops surrounding the beam
+                that have been resized to square. The peripherals of the beam
+                are flush with the edges of the image.
+
+    Returns: Mask image with shape (h, w, 1), where pixels with value 1 and
+        0 indicating locations that are and are not in the beam, respectively.
+
+    """
 
     mask = np.zeros((h, w, 1))
+    y_bottom = h if square_roi else None
 
     if probe == Probe.LINEAR.value:
         polygon = get_linear_beam_shape(keypoints)
     elif probe == Probe.CURVILINEAR.value:
-        polygon = get_curved_linear_beam_shape(keypoints)
+        polygon = get_curved_linear_beam_shape(keypoints, y_bottom=y_bottom)
     elif probe == Probe.PHASED.value:
-        polygon = get_phased_array_beam_shape(keypoints)
+        polygon = get_phased_array_beam_shape(keypoints, y_bottom=y_bottom)
     else:
         raise Exception("Probe type {} does not exist".format(probe))
 
-    for i in range(len(polygon) - 1):
-        mask = cv2.line(
-            mask,
-            (polygon[i][0], polygon[i][1]),
-            (polygon[i + 1][0], polygon[i + 1][1]),
-            (0, 0, 255),
-        )
-
+    cv2.fillPoly(mask, pts=[polygon], color=(1, 1, 1))
     return mask
 
-    return
 
 def get_point_of_intersection(keypoints) -> Tuple[float, float]:
     """Determines the origina point of the ultrasound beam.
@@ -75,18 +86,18 @@ def get_points_on_arc(
     x_b: float,
     x_c: float,
     y_c: float,
-    bottom_flush: bool = False,
+    y_bottom: Optional[float] = None,
     n_points: int = 200,
-) -> List[Tuple[int, int]]:
+) -> List[List[int]]:
     """Sample points on the arc of a circle.
 
     Returns a list of points on the arc of a circle
     where (x_c, y_c) is the centre of the circle and
     (x_a, y_a) and (x_b, y_b) are points on the circle
     at each end of the arc.
-    Note: Assumes that the coordinates are in image space.
-          If the images are resized, the arc is no longer
-          on a circle.
+    Assumes that the coordinates are in image space.
+    Assumes the arcs are circular, unless y_bottom is
+    specified.
 
     Args:
         x_a: x-coordinate of point a
@@ -94,6 +105,7 @@ def get_points_on_arc(
         x_b: x-coordinate of point b
         x_c: x-coordinate of centre of circle
         y_c: y-coordinate of centre of circle
+        y_bottom: y-coordinate of bottom of beam
         n_points: Number of points to sample on the arc
 
     Returns:
@@ -101,24 +113,27 @@ def get_points_on_arc(
     """
 
     xs = np.linspace(x_a, x_b, n_points)
-    if bottom_flush:
+    if y_bottom:
+        # Arc is elliptical
         coeff = np.array([
             [(x_a - x_c) ** 2, (y_a - y_c) ** 2],
-            [(x_b - x_c) ** 2, (y_a - y_c) ** 2]
+            [0., (y_bottom - y_c) ** 2]
         ])
-        dep = np.array([1, 1])
+        dep = np.array([1., 1.])
         a, b = np.linalg.solve(coeff, dep)
-        ys = np.sqrt((1 - (xs - x_c) * a) / b) + y_c
+        ys = np.sqrt((1 - (xs - x_c) ** 2 * a) / b) + y_c
     else:
+        # Arc is circular
         radius = np.linalg.norm([x_c - x_a, y_c - y_a])
         ys = np.sqrt(radius**2 - (xs - x_c) ** 2) + y_c
-    arc = [(int(xs[i]), int(ys[i])) for i in range(len(xs))]
+    arc = [[int(xs[i]), int(ys[i])] for i in range(len(xs))]
     return arc
 
 
 def get_phased_array_beam_shape(
     keypoints: npt.NDArray[np.float32],
-) -> List[Tuple[float, float]]:
+    y_bottom: Optional[float] = None,
+) -> npt.NDArray[np.float32]:
     """Returns polygon representing outline of phased array probe.
 
     Determines points on a polygon that give the bounds of a phased
@@ -126,6 +141,7 @@ def get_phased_array_beam_shape(
     on a polygon.
     Args:
         keypoints: Beam keypoints, in format [x1, y1, x2, y2, x3, y3, x4, y4]
+        y_bottom: y-coordinate of bottom of beam
 
     Returns:
         List of point coordinates defining the shape of the mask
@@ -134,19 +150,19 @@ def get_phased_array_beam_shape(
 
     x_itn, y_itn = get_point_of_intersection(keypoints)
 
-    arc = get_points_on_arc(x3, y3, x4, x_itn, y_itn)
+    arc = get_points_on_arc(x3, y3, x4, x_itn, y_itn, y_bottom=y_bottom)
 
     polygon = [(x1, y1), (x3, y3)]
     for p in arc:
         polygon.append(p)
     polygon.append((x2, y2))
-    polygon.append((x1, y1))
-    return polygon
+    return np.array(polygon, dtype=np.int32)
 
 
 def get_curved_linear_beam_shape(
     keypoints: npt.NDArray[np.float32],
-) -> List[Tuple[float, float]]:
+    y_bottom: Optional[float] = None,
+) -> npt.NDArray[np.float32]:
     """Returns polygon representing outline of phased array probe.
 
     Determines points on a polygon that give the bounds of a curved
@@ -154,6 +170,7 @@ def get_curved_linear_beam_shape(
     approximated by edges on a polygon.
     Args:
         keypoints: Beam keypoints, in format [x1, y1, x2, y2, x3, y3, x4, y4]
+        y_bottom: y-coordinate of bottom of beam
 
     Returns:
         List of point coordinates defining the shape of the mask
@@ -162,25 +179,29 @@ def get_curved_linear_beam_shape(
 
     x_itn, y_itn = get_point_of_intersection(keypoints)
 
-    # Sample points on the top and bottom arcs
-    arc_bot = get_points_on_arc(x3, y3, x4, x_itn, y_itn)
-    arc_top = get_points_on_arc(x1, y1, x2, x_itn, y_itn)
+    # Sample points on bottom arc
+    arc_bot = get_points_on_arc(x3, y3, x4, x_itn, y_itn, y_bottom=y_bottom)
+
+    # Sample points on the top arc
+    top_minimum = (y_bottom / y3) * (y1 - y_itn) + y_itn
+    arc_top = get_points_on_arc(x1, y1, x2, x_itn, y_itn, y_bottom=top_minimum)
 
     # Get a list of points on the polygon in the order in which the
     # edges will be drawn. We start from the top left corner of the
     # beam and proceed counterclockwise.
-    polygon = [(x1, y1), (x3, y3)]  # Left line
-    for p in arc_bot:  # Bottom circle
-        polygon.append(p)
-    polygon.append((x2, y2))  # Right line
+    polygon = []
     for p in reversed(arc_top):  # Top circle
         polygon.append(p)
-    return polygon
+    polygon.extend([[x1, y1], [x3, y3]])  # Left line
+    for p in arc_bot:  # Bottom circle
+        polygon.append(p)
+    #polygon.append([x2, y2])  # Right line
+    return np.array(polygon, dtype=np.int32)
 
 
 def get_linear_beam_shape(
     keypoints: npt.NDArray[np.float32],
-) -> List[Tuple[float, float]]:
+) -> npt.NDArray[np.float32]:
     """Return polygon for linear probe given keypoints.
 
     Args:
@@ -193,39 +214,10 @@ def get_linear_beam_shape(
     x1, y1, x2, y2, x3, y3, x4, y4 = keypoints
 
     # The polygon defining the mask is a rectangle
-    polygon = [
-        (x1, y1),
-        (x2, y2),
-        (x4, y4),
-        (x3, y3),
-        (x1, y1),
-    ]
-
-    return polygon
-
-
-def get_linear_beam_shape(
-    keypoints,
-) -> List[Tuple[float, float]]:
-    """Return polygon for linear probe given keypoints.
-
-    Args:
-        keypoints: keypoints for phased array
-            `[[x1, y1], [x2, y2], ..., [xn, yn,]]`
-
-    Returns:
-        list of point coordinates representing shape of mask polygon. For
-        linear probes, only the top left and bottom right corners are used.
-    """
-    x1, y1, x2, y2, x3, y3, x4, y4 = keypoints
-
-    # The polygon defining the mask is a rectangle
-    polygon = [
-        (x1, y1),
-        (x2, y2),
-        (x3, y3),
-        (x4, y4),
-        (x1, y1),
-    ]
-
+    polygon = np.array([
+        [x1, y1],
+        [x2, y2],
+        [x4, y4],
+        [x3, y3]
+    ], dtype=np.int32)
     return polygon

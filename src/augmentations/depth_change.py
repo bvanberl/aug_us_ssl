@@ -65,8 +65,9 @@ class DepthChange(nn.Module):
         else:
             x_itn, y_itn = get_point_of_intersection(*keypoints)
             translate_x = (scale - 1) * (w / 2 - x_itn)
-            translate_y = (scale - 1) * (h / 2 - y_itn)
+            translate_y = (scale - 1) * (h / 2 - keypoints[1])
 
+        # Perform affine transform that scales and translates image
         new_image = tvf.affine(image, 0., [translate_x, translate_y], scale, 0.)
 
         if probe == Probe.LINEAR.value and scale < 1.:
