@@ -40,8 +40,8 @@ class ProbeTypeChange(nn.Module):
 
         super(ProbeTypeChange, self).__init__()
         self.square_roi = square_roi
-        self.min_width_frac = min_linear_width_frac
-        self.max_width_frac = max_linear_width_frac
+        self.min_linear_width_frac = min_linear_width_frac
+        self.max_linear_width_frac = max_linear_width_frac
         self.min_convex_rad_factor = min_convex_rad_factor
         self.max_convex_rad_factor = max_convex_rad_factor
 
