@@ -1,7 +1,11 @@
+from typing import Optional, List
+
+import numpy as np
 import torch
 from torch import nn, Tensor
 from torchvision.transforms.v2 import functional as tvf, Transform
 from torchvision.transforms import InterpolationMode as im
+from pytorch_wavelets import DWTForward, DWTInverse
 
 from src.constants import BeamKeypoints, Probe
 from src.augmentations.aug_utils import *
@@ -266,3 +270,79 @@ class SaltAndPepperNoise(nn.Module):
         new_image = image * mask    # Only apply noise to the ultrasound beam
         return new_image, label, keypoints, mask, probe
 
+class WaveletDenoise(nn.Module):
+    def __init__(
+            self,
+            wavelet_names: Optional[List[str]] = None,
+            j: int = 3,
+            j_0: int = 2,
+            alpha: float = 3.0
+    ):
+        """Initializes the Wavelet Denoise layer.
+
+        Args:
+            wavelet_names: Names of candidate mother wavelets. Correspond to
+                names in the pywavelets package
+            j: Number of levels of wavelet decomposition
+            j_0: Decomposition level for Birgé-Massart thresholding strategy
+            alpha: Scaling factor for Birgé-Massart thresholding strategy
+        """
+        assert j > 0, "j must be >= 0"
+        assert j_0 < j, "j_0 must be a valid decomposition level < j"
+        assert alpha > 1., "alpha must be >= 1"
+
+        super(WaveletDenoise, self).__init__()
+
+        self.j = j
+        self.j_0 = j_0
+        self.alpha = alpha
+
+        if wavelet_names is not None:
+            self.wavelet_names = wavelet_names
+        else:
+            self.wavelet_names = ["db2", "db5", "db30"]
+
+        self.forward_dwts = []
+        self.inverse_dwts = []
+        for name in self.wavelet_names:
+            self.forward_dwts.append(DWTForward(J=3, wave=name))
+            self.inverse_dwts.append(DWTInverse(wave=name))
+
+    def forward(
+            self,
+            image: Tensor,
+            label: Tensor,
+            keypoints: Tensor,
+            mask: Tensor,
+            probe: Tensor,
+            **kwargs
+    ) -> (Tensor, Tensor, Tensor, Tensor):
+        """Applies a discrete wavelet transform to denoise the image
+
+        Selects a random discrete wavelet transform and applies it to
+        the input image as a means of denoising.
+
+        Args:
+            image: 3D Image tensor, with shape (c, h, w)
+            label: Label for the image, which is unaltered
+            keypoints: 1D tensor with shape (8,) containing beam mask keypoints
+                       with format [x1, y1, x2, y2, x3, y3, x4, y4]
+            mask: Beam mask, with shape (1, h, w)
+            probe: Probe type of the image
+
+        Returns:
+            augmented image, label, keypoints, mask, probe type
+        """
+
+        # Determine the number of pixels to shade white and black
+        idx = np.random.randint(0, len(self.wavelet_names))
+        yl, yh = self.forward_dwts[idx](image.unsqueeze(0).float())
+
+        m = yh[-1].shape[-1] * yh[-1].shape[-2] / 2
+        for i in range(self.j_0):
+            thresh = m / (self.j_0 + 1 - i) ** self.alpha
+            yh[i] = torch.sign(yh[i]) * torch.clamp(torch.abs(yh[i]) - thresh, min=0.)
+
+        new_image = (self.inverse_dwts[idx]((yl, yh))).squeeze(0)
+        new_image = torch.clamp(new_image, 0., 255.).to(torch.uint8)
+        return new_image, label, keypoints, mask, probe

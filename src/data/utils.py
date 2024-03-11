@@ -183,7 +183,7 @@ def get_curved_linear_beam_shape(
     arc_bot = get_points_on_arc(x3, y3, x4, x_itn, y_itn, y_bottom=y_bottom)
 
     # Sample points on the top arc
-    top_minimum = (y_bottom / y3) * (y1 - y_itn) + y_itn
+    top_minimum = (y_bottom - y_itn) / (y3 - y_itn) * (y1 - y_itn) + y_itn
     arc_top = get_points_on_arc(x1, y1, x2, x_itn, y_itn, y_bottom=top_minimum)
 
     # Get a list of points on the polygon in the order in which the
@@ -195,7 +195,6 @@ def get_curved_linear_beam_shape(
     polygon.extend([[x1, y1], [x3, y3]])  # Left line
     for p in arc_bot:  # Bottom circle
         polygon.append(p)
-    #polygon.append([x2, y2])  # Right line
     return np.array(polygon, dtype=np.int32)
 
 
