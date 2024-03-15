@@ -10,8 +10,8 @@ class ProbeTypeChange(nn.Module):
     """Preprocessing layer that converts the probe type of the beam.
 
     This augmentation transformation distorts non-linear beam shapes
-    (i.e., curvilinear or phased array) to a linear beam shape, or linear
-    beam shapes to curvilinear beam shapes. In other words, it transforms
+    (i.e., curved linear or phased array) to a linear beam shape, or linear
+    beam shapes to curved linear beam shapes. In other words, it transforms
     the image such that it appears like it was acquired from a different
     type of ultrasound probe.
     """
@@ -79,7 +79,7 @@ class ProbeTypeChange(nn.Module):
 
         if probe == Probe.LINEAR.value:
 
-            # Sample random radius for curvilinear beam
+            # Sample random radius for curved linear beam
             rad_factor = self.min_convex_rad_factor + \
                          torch.rand(()) * (self.max_convex_rad_factor - self.min_convex_rad_factor)
             bot_r = torch.tensor((y3 - y1) * rad_factor)
@@ -94,7 +94,7 @@ class ProbeTypeChange(nn.Module):
             top_r = torch.sqrt((x_itn - new_x1) ** 2 + (y1 - y_itn) ** 2)
             new_keypoints = torch.stack([new_x1, y1, new_x2, y2, x3, new_y3, x4, new_y4])
 
-            # Obtain flow field mapping points in new curvilinear image to old linear image
+            # Obtain flow field mapping points in new curved linear image to old linear image
             y_coords = torch.linspace(0., h - 1., h)
             x_coords = torch.linspace(0., w - 1, w)
             new_yy, new_xx = torch.meshgrid(y_coords, x_coords, indexing='ij')
@@ -108,7 +108,7 @@ class ProbeTypeChange(nn.Module):
             flow_field = torch.stack([out_xx, out_yy], dim=-1)
             new_image = nn.functional.grid_sample(image.unsqueeze(0).float(), flow_field.unsqueeze(0)).squeeze(0)
             new_mask = nn.functional.grid_sample(mask.unsqueeze(0).float(), flow_field.unsqueeze(0)).squeeze(0)
-            return new_image, label, new_keypoints, new_mask, Probe.CURVILINEAR.value
+            return new_image, label, new_keypoints, new_mask, Probe.CURVED_LINEAR.value
 
         else:
 
@@ -180,7 +180,7 @@ class ProbeTypeChange(nn.Module):
             norm_yy = (yy - y1) / beam_h  # Normalize y coordinates
 
             # Calculate coordinate map based on original beam type
-            if probe == Probe.CURVILINEAR.value:
+            if probe == Probe.CURVED_LINEAR.value:
                 # Length of radial line from intersection to (x1, y1)
                 top_r = torch.sqrt((x1 - x_itn) ** 2 + (y1 - y_itn) ** 2)
 

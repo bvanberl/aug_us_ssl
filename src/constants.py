@@ -12,5 +12,5 @@ class BeamKeypoints(Enum):
 
 class Probe(Enum):
     LINEAR = 0
-    CURVILINEAR = 1
-    PHASED = 2
+    CURVED_LINEAR = 1
+    PHASED_ARRAY = 2

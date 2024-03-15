@@ -78,7 +78,7 @@ class ConvexityMutation(nn.Module):
         c, h, w = image.shape
 
         # If phased array with point at top, marginally move top keypoints laterally
-        if torch.abs(x2 - x1) < self.point_thresh and probe == Probe.PHASED.value:
+        if torch.abs(x2 - x1) < self.point_thresh and probe == Probe.PHASED_ARRAY.value:
             x1 -= 0.5
             x2 += 0.5
 

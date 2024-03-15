@@ -193,7 +193,7 @@ class GaussianNoise(nn.Module):
 
         # Sample Gaussian noise to be added to each pixel in the ultrasound beam
         sigma = self.min_sigma + torch.rand(()) * (self.max_sigma - self.min_sigma)
-        noise = sigma * torch.randn_like(mask)
+        noise = sigma * torch.randn(*mask.shape)
         noise = noise * mask
 
         # Add the Gaussian noise to the image

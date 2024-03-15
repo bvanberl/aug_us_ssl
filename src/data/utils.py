@@ -32,9 +32,9 @@ def get_beam_mask(h, w, keypoints, probe, square_roi: bool = False):
 
     if probe == Probe.LINEAR.value:
         polygon = get_linear_beam_shape(keypoints)
-    elif probe == Probe.CURVILINEAR.value:
+    elif probe == Probe.CURVED_LINEAR.value:
         polygon = get_curved_linear_beam_shape(keypoints, y_bottom=y_bottom)
-    elif probe == Probe.PHASED.value:
+    elif probe == Probe.PHASED_ARRAY.value:
         polygon = get_phased_array_beam_shape(keypoints, y_bottom=y_bottom)
     else:
         raise Exception("Probe type {} does not exist".format(probe))
