@@ -10,3 +10,4 @@ opencv_python>=4.5.*.*
 tqdm
 torchsummary
 black
+kornia==0.7.1
