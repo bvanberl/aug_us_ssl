@@ -8,6 +8,10 @@ import numpy as np
 
 
 class CLAHETransform(nn.Module):
+    """
+    This transformation applies contrast-limited adaptive histogram
+    equalization to the input.
+    """
 
     def __init__(
             self,
@@ -15,6 +19,13 @@ class CLAHETransform(nn.Module):
             max_clip_limit: float = 50.0,
             tile_grid_size: Tuple[int, int] = (8, 8)
     ):
+        """
+        Initializes the CLAHETransform class
+        Args:
+            min_clip_limit: Minimum value for histogram clip limit
+            max_clip_limit: Maximum value for histogram clip limit
+            tile_grid_size: Shape of tiles into which image is divided
+        """
         super(CLAHETransform, self).__init__()
         self.min_clip_limit = min_clip_limit
         self.max_clip_limit = max_clip_limit
@@ -31,6 +42,8 @@ class CLAHETransform(nn.Module):
     ) -> (Tensor, Tensor, Tensor, Tensor):
         """Applies CLAHE to input image.
 
+        Samples a random value for the histogram clip limit and applies
+        CLAHE to the image.
         Args:
             image: 3D Image tensor, with shape (c, h, w)
             label: Label for the image, which is unaltered
@@ -43,7 +56,6 @@ class CLAHETransform(nn.Module):
             augmented image, label, keypoints, mask, probe type
         """
 
-        # Sample a random clip
         clip_limit = np.random.uniform(self.min_clip_limit, self.max_clip_limit)
         new_image = equalize_clahe(image / 255., clip_limit, self.tile_grid_size)
         new_image = (new_image * 255) .to(torch.uint8)
@@ -52,6 +64,9 @@ class CLAHETransform(nn.Module):
 
 
 class BrightnessContrastChange(nn.Module):
+    """
+    This transformation applies random brightness and contrast changes.
+    """
 
     def __init__(
             self,
@@ -60,6 +75,18 @@ class BrightnessContrastChange(nn.Module):
             min_contrast: float = 1.,
             max_contrast: float = 1.
     ):
+        """
+        Initializes the BrightnessContrastChange class
+        Args:
+            min_brightness: Minimum brightness change
+            max_brightness: Maximum brightness change
+            min_contrast: Minimum contrast change
+            max_contrast: Maximum contrast change
+        """
+
+        assert 0. <= min_brightness <= max_brightness <= 2., "Brightness range is [0, 2]"
+        assert 0. <= min_contrast <= max_contrast <= 2., "Contrast range is [0, 2]"
+
         super(BrightnessContrastChange, self).__init__()
         self.min_brightness = min_brightness
         self.max_brightness = max_brightness
@@ -75,8 +102,10 @@ class BrightnessContrastChange(nn.Module):
             probe: Tensor,
             **kwargs
     ) -> (Tensor, Tensor, Tensor, Tensor):
-        """Applies CLAHE to input image.
+        """Applies random brightness and contrast change to image
 
+        Samples random brightness and contrast change magnitudes and
+        applies them to the image.
         Args:
             image: 3D Image tensor, with shape (c, h, w)
             label: Label for the image, which is unaltered

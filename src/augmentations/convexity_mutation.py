@@ -134,6 +134,7 @@ class ConvexityMutation(nn.Module):
         # Construct new image using values from old image
         new_image = nn.functional.grid_sample(image.unsqueeze(0).float(), adjusted_grid.unsqueeze(0)).squeeze(0)
         new_mask = nn.functional.grid_sample(mask.unsqueeze(0).float(), adjusted_grid.unsqueeze(0)).squeeze(0)
+        new_image = new_image * new_mask
 
         # Determine new keypoints
         new_keypoints = torch.stack([

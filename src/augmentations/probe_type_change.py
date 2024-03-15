@@ -79,9 +79,12 @@ class ProbeTypeChange(nn.Module):
 
         if probe == Probe.LINEAR.value:
 
+            # Sample random radius for curvilinear beam
             rad_factor = self.min_convex_rad_factor + \
                          torch.rand(()) * (self.max_convex_rad_factor - self.min_convex_rad_factor)
             bot_r = torch.tensor((y3 - y1) * rad_factor)
+
+            # Calculate new keypoints
             x_itn = (x4 - x3) / 2.
             y_itn = y3 - bot_r
             new_y3 = y_itn + torch.sqrt(bot_r ** 2 - (x_itn - x1) ** 2)
@@ -89,7 +92,9 @@ class ProbeTypeChange(nn.Module):
             new_x1 = x_itn - (y1 - y_itn) * (x_itn - x3) / (new_y3 - y_itn)
             new_x2 = 2 * x_itn - new_x1
             top_r = torch.sqrt((x_itn - new_x1) ** 2 + (y1 - y_itn) ** 2)
+            new_keypoints = torch.stack([new_x1, y1, new_x2, y2, x3, new_y3, x4, new_y4])
 
+            # Obtain flow field mapping points in new curvilinear image to old linear image
             y_coords = torch.linspace(0., h - 1., h)
             x_coords = torch.linspace(0., w - 1, w)
             new_yy, new_xx = torch.meshgrid(y_coords, x_coords, indexing='ij')
@@ -99,12 +104,10 @@ class ProbeTypeChange(nn.Module):
             out_yy = (torch.sqrt((x_itn - new_xx) ** 2 + (y_itn - new_yy) ** 2) - top_r) / (bot_r - top_r)
             out_yy = out_yy * 2. - 1.
 
+            # Warp the image and mask using the flow field
             flow_field = torch.stack([out_xx, out_yy], dim=-1)
             new_image = nn.functional.grid_sample(image.unsqueeze(0).float(), flow_field.unsqueeze(0)).squeeze(0)
-
             new_mask = nn.functional.grid_sample(mask.unsqueeze(0).float(), flow_field.unsqueeze(0)).squeeze(0)
-            new_keypoints = torch.stack([new_x1, y1, new_x2, y2, x3, new_y3, x4, new_y4])
-
             return new_image, label, new_keypoints, new_mask, Probe.CURVILINEAR.value
 
         else:

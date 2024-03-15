@@ -70,6 +70,7 @@ class DepthChange(nn.Module):
         # Perform affine transform that scales and translates image
         new_image = tvf.affine(image, 0., [translate_x, translate_y], scale, 0.)
 
+        # Ensure that beam edges correspond with mask edges
         if probe == Probe.LINEAR.value and scale < 1.:
             x_diff = ((1 - scale) * w / 2).int()
             new_image = new_image[:, :, x_diff: w - x_diff]
