@@ -58,8 +58,8 @@ class CLAHETransform(nn.Module):
 
         clip_limit = np.random.uniform(self.min_clip_limit, self.max_clip_limit)
         new_image = equalize_clahe(image / 255., clip_limit, self.tile_grid_size)
-        new_image = (new_image * 255) .to(torch.uint8)
-        new_image = new_image * mask
+        new_image = new_image * 255
+        new_image = (new_image * mask).to(torch.uint8)
         return new_image, label, keypoints, mask, probe
 
 

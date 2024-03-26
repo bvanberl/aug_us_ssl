@@ -1,0 +1,41 @@
+paths:
+  images: "B:/Datasets/LUS_SSL/aug_us_ssl/data/bmodes"
+  masks: "B:/Datasets/LUS_SSL/aug_us_ssl/data/masks"
+  splits: "B:/Datasets/LUS_SSL/aug_us_ssl/splits/aug_us_ssl_splits"
+  model_weights: "results/models"
+
+data:
+  height: 128
+  width: 128
+  min_pixel_value: 0.0
+  max_pixel_value: 255.0
+  num_channels: 3
+
+pretrain:
+  seed: 11
+  epochs: 20
+  batch_size: 512
+  max_lr: 0.2
+  warmup_epochs: 2
+  weight_decay: 0.000001
+  extractor: 'mobilenetv3'
+  proj_nodes: [768, 768]
+  use_bias: true
+  imagenet_weights: true
+  use_unlabelled: false
+  method: "simclr"
+  augment_pipeline: "august"
+  n_cutoff_layers: 0
+  views: ['parenchymal']
+  hparams:
+    simclr:
+      tau: 0.1
+    barlow_twins:
+      lambda_: 0.005
+    vicreg:
+      lambda_: 25.0
+      mu: 25.0
+      nu: 1.0
+
+augment:
+  august:

@@ -34,39 +34,25 @@ def get_normalize_transform(
 
 
 def get_validation_scaling(
-        height: int,
-        width: int,
-        gray_to_rgb: bool = True,
-        resize_first: bool = False,
         mean_pixel_val: List[float] = None,
         std_pixel_val: List[float] = None
 ) -> v2.Compose:
     """Defines augmentation pipeline for supervised learning experiments.
-    :param height: Image height
-    :param width: Image width
     :param gray_to_rgb: If True, convert grayscale inputs to 3-channel RGB
-    :param resize_first: If True, resize image to (height, width) before transforms
     :param mean_pixel_val: Channel-wise means
     :param std_pixel_val: Channel-wise standard deviation
     :return: Callable augmentation pipeline
     """
     transforms = [
-        v2.Resize((height, width), antialias=True),
         v2.ToDtype(torch.float32, scale=True),
         get_normalize_transform(mean_pixel_val, std_pixel_val)
     ]
-    if resize_first:
-        transforms.insert(1, v2.Resize((height, width), antialias=True))
-    if gray_to_rgb:
-        transforms.insert(1, v2.Lambda(lambda x: x.repeat(3, 1, 1)))
     return v2.Compose(transforms)
 
 
 def get_byol_augmentations(
         height: int,
         width: int,
-        gray_to_rgb: bool = True,
-        resize_first: bool = False,
         mean_pixel_val: List[float] = None,
         std_pixel_val: List[float] = None,
 ) -> v2.Compose:
@@ -76,9 +62,7 @@ def get_byol_augmentations(
     Appendix C.1, which is derived from BYOL.
     :param height: Image height
     :param width: Image width
-    :param gray_to_rgb: If True, convert grayscale inputs to 3-channel RGB
     :param Desired input channels
-    :param resize_first: If True, resize image to (height, width) before transforms
     :param mean_pixel_val: Channel-wise means
     :param std_pixel_val: Channel-wise standard deviation
     :return: Callable augmentation pipeline
@@ -92,15 +76,10 @@ def get_byol_augmentations(
         v2.ToDtype(torch.float32, scale=True),
         get_normalize_transform(mean_pixel_val, std_pixel_val)
     ]
-    if resize_first:
-        transforms.insert(1, v2.Resize((height, width), antialias=True))
-    if gray_to_rgb:
-        transforms.insert(1, v2.Lambda(lambda x: x.repeat(3, 1, 1)))
     return v2.Compose(transforms)
 
 
 def get_august_augmentations(
-        gray_to_rgb: bool = True,
         wavelet_denoise_prob: float = 0.5,
         brightness_contrast_prob: float = 0.5,
         clahe_prob: float = 0.2,
@@ -117,7 +96,6 @@ def get_august_augmentations(
 
     Possible transforms include random crop & resize, contrast
     change, Gaussian blur, and horizontal flip.
-    :param gray_to_rgb: If True, convert grayscale inputs to 3-channel RGB
     :param wavelet_denoise_prob: Probability of applying wavelet denoise augmentation
     :param brightness_contrast_prob: Probability of applying brightness/contrast augmentation
     :param clahe_prob: Probability of applying CLAHE augmentation
@@ -137,11 +115,11 @@ def get_august_augmentations(
             p=wavelet_denoise_prob
         ),
         v2.RandomApply(
-            [BrightnessContrastChange(min_brightness=0.5, max_brightness=1.5, min_contrast=0.5, max_contrast=1.5)],
+            [BrightnessContrastChange(min_brightness=0.6, max_brightness=1.4, min_contrast=0.6, max_contrast=1.4)],
             p=brightness_contrast_prob
         ),
         v2.RandomApply(
-            [CLAHETransform(min_clip_limit=20., max_clip_limit=25., tile_grid_size=(6, 6))],
+            [CLAHETransform(min_clip_limit=10, max_clip_limit=15, tile_grid_size=(6, 6))],
             p=clahe_prob
         ),
         v2.RandomApply(
@@ -153,7 +131,7 @@ def get_august_augmentations(
             p=convexity_prob
         ),
         v2.RandomApply(
-            [DepthChange(min_depth_factor=1.0, max_depth_factor=1.5)],
+            [DepthChange(min_depth_factor=1.0, max_depth_factor=1.25)],
             p=depth_prob
         ),
         v2.RandomApply(
@@ -170,9 +148,7 @@ def get_august_augmentations(
                                                     max_pepper_frac=0.005)],
             p=sp_prob
         ),
-        #v2.ToDtype(torch.float32, scale=True),
-        #get_normalize_transform(mean_pixel_val, std_pixel_val)
+        v2.ToDtype(torch.float32, scale=True),
+        get_normalize_transform(mean_pixel_val, std_pixel_val)
     ]
-    if gray_to_rgb:
-        transforms.insert(1, v2.Lambda(lambda x: x.repeat(3, 1, 1)))
     return v2.Compose(transforms)

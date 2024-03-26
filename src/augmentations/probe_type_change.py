@@ -82,7 +82,7 @@ class ProbeTypeChange(nn.Module):
             # Sample random radius for curved linear beam
             rad_factor = self.min_convex_rad_factor + \
                          torch.rand(()) * (self.max_convex_rad_factor - self.min_convex_rad_factor)
-            bot_r = torch.tensor((y3 - y1) * rad_factor)
+            bot_r = (y3 - y1) * rad_factor
 
             # Calculate new keypoints
             x_itn = (x4 - x3) / 2.
@@ -106,8 +106,9 @@ class ProbeTypeChange(nn.Module):
 
             # Warp the image and mask using the flow field
             flow_field = torch.stack([out_xx, out_yy], dim=-1)
-            new_image = nn.functional.grid_sample(image.unsqueeze(0).float(), flow_field.unsqueeze(0)).squeeze(0)
-            new_mask = nn.functional.grid_sample(mask.unsqueeze(0).float(), flow_field.unsqueeze(0)).squeeze(0)
+            new_image = nn.functional.grid_sample(image.unsqueeze(0).float(), flow_field.unsqueeze(0), align_corners=False).squeeze(0)
+            new_mask = nn.functional.grid_sample(mask.unsqueeze(0).float(), flow_field.unsqueeze(0), align_corners=False).squeeze(0)
+            new_image = new_image.to(torch.uint8)
             return new_image, label, new_keypoints, new_mask, Probe.CURVED_LINEAR.value
 
         else:
@@ -132,7 +133,6 @@ class ProbeTypeChange(nn.Module):
                     image = tvf.resize(image, [h, w])
                     w_delta = w / (x4 - x3)
                     x1 = (x1 - x3) * w_delta
-                    x2 = (x2 - x3) * w_delta
                     x_itn = (x_itn - x3) * w_delta
                     x3 = 0.
                     x4 = w - 1.
@@ -222,7 +222,7 @@ class ProbeTypeChange(nn.Module):
             new_yy = new_yy / h * 2. - 1.
             new_xx = new_xx / w * 2. - 1.
             flow_field = torch.stack([new_xx, new_yy], dim=-1)
-            mapped_image = nn.functional.grid_sample(image.unsqueeze(0).float(), flow_field.unsqueeze(0)).squeeze(0)
+            mapped_image = nn.functional.grid_sample(image.unsqueeze(0).float(), flow_field.unsqueeze(0), align_corners=False).squeeze(0)
 
             # Update beam pixels in original image with distorted linear beam
             new_mask = (
@@ -230,7 +230,7 @@ class ProbeTypeChange(nn.Module):
                 & (yy <= bottom_bound)
                 & (xx >= new_left_bound)
                 & (xx <= new_right_bound)
-            ).float().unsqueeze(0)
+            ).unsqueeze(0)
             mapped_image = new_mask * mapped_image
 
             # Set pixels within original beam ROI but outside new ROI to black
@@ -248,6 +248,7 @@ class ProbeTypeChange(nn.Module):
             else:
                 new_image = tvf.resize(mapped_image, [h, h])
                 new_mask = tvf.resize(new_mask, [h, h])
+            new_image = new_image.to(torch.uint8)
 
             return new_image, label, new_keypoints, new_mask, Probe.LINEAR.value
 

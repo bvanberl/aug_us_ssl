@@ -77,4 +77,5 @@ class DepthChange(nn.Module):
             new_image = tvf.resize_image(new_image, [h, w])
         else:
             new_image = mask * new_image
+        new_image = new_image.to(torch.uint8)
         return new_image, label, keypoints, mask, probe

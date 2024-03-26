@@ -136,13 +136,13 @@ class SpeckleNoise(nn.Module):
             out_xx = torch.atan2(new_xx - x_itn, new_yy - y_itn) / theta * 2.
             out_yy = torch.sqrt((x_itn - new_xx) ** 2 + (y_itn - new_yy) ** 2) / bot_r * 2. - 1.
         flow_field = torch.stack([out_xx, out_yy], dim=-1)
-        new_image = nn.functional.grid_sample(img_sampled.unsqueeze(0).float(), flow_field.unsqueeze(0)).squeeze(0)
+        new_image = nn.functional.grid_sample(img_sampled.unsqueeze(0).float(), flow_field.unsqueeze(0), align_corners=False).squeeze(0)
 
         if self.square_roi:
             new_image = tvf.resize(new_image, [h, h])
 
         # Clamp pixel intensities (Step 4)
-        new_image = torch.clamp(new_image, 0., 255.)
+        new_image = torch.clamp(new_image, 0, 255).to(torch.uint8)
         return new_image, label, keypoints, mask, probe
 
 
@@ -198,7 +198,7 @@ class GaussianNoise(nn.Module):
 
         # Add the Gaussian noise to the image
         new_image = image + noise
-        new_image = torch.clamp(new_image, 0., 255.)
+        new_image = torch.clamp(new_image, 0., 255.).to(torch.uint8)
         return new_image, label, keypoints, mask, probe
 
 
@@ -267,7 +267,7 @@ class SaltAndPepperNoise(nn.Module):
         pepper_locs = torch.randint(0, w * h - 1, size=(n_pepper,))
         image[:, pepper_locs // w, pepper_locs % w] = 0.
 
-        new_image = image * mask    # Only apply noise to the ultrasound beam
+        new_image = (image * mask).to(torch.uint8)    # Only apply noise to the ultrasound beam
         return new_image, label, keypoints, mask, probe
 
 class WaveletDenoise(nn.Module):
