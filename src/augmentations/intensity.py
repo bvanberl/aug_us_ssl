@@ -1,10 +1,10 @@
+import random
 from typing import Tuple
 
 import torch
 from torch import nn, Tensor
 from torchvision.transforms.v2 import functional as tvf
 from kornia.enhance import equalize_clahe
-import numpy as np
 
 
 class CLAHETransform(nn.Module):
@@ -56,7 +56,7 @@ class CLAHETransform(nn.Module):
             augmented image, label, keypoints, mask, probe type
         """
 
-        clip_limit = np.random.uniform(self.min_clip_limit, self.max_clip_limit)
+        clip_limit = random.uniform(self.min_clip_limit, self.max_clip_limit)
         new_image = equalize_clahe(image / 255., clip_limit, self.tile_grid_size)
         new_image = new_image * 255
         new_image = (new_image * mask).to(torch.uint8)
@@ -119,14 +119,76 @@ class BrightnessContrastChange(nn.Module):
         """
 
         # Sample random brightness and contrast change
-        contrast_adjust = self.min_contrast + torch.rand(()) * (self.max_contrast - self.min_contrast)
-        brightness_adjust = self.min_brightness + torch.rand(()) * (self.max_brightness - self.min_brightness)
+        contrast_adjust = random.uniform(self.min_contrast, self.max_contrast)
+        brightness_adjust = random.uniform(self.min_brightness, self.max_brightness)
 
         # Apply brightness and contrast changes
         new_image = tvf.adjust_brightness(image, brightness_adjust)
         new_image = tvf.adjust_contrast(new_image, contrast_adjust)
 
         # Mask and return image
-        new_image = new_image * mask
+        new_image = (new_image * mask).to(torch.uint8)
         return new_image, label, keypoints, mask, probe
 
+
+class GammaCorrection(nn.Module):
+    """
+    This transformation applies random gamma correction.
+    """
+
+    def __init__(
+            self,
+            min_gamma: float = 0.5,
+            max_gamma: float = 1.75,
+            gain: float = 1.
+    ):
+        """
+        Initializes the GammaCorrection class
+        Args:
+            min_gamma: Minimum gamma
+            max_gamma: Maximum gamma
+            gain: Brightness constant
+        """
+
+        assert 0. <= min_gamma <= max_gamma, "Gamma must be non-negative"
+        assert 0 < gain, "Gain must be positive"
+
+        super(GammaCorrection, self).__init__()
+        self.min_gamma = min_gamma
+        self.max_gamma = max_gamma
+        self.gain = gain
+    def forward(
+            self,
+            image: Tensor,
+            label: Tensor,
+            keypoints: Tensor,
+            mask: Tensor,
+            probe: Tensor,
+            **kwargs
+    ) -> (Tensor, Tensor, Tensor, Tensor):
+        """Applies gamma correction to input image
+
+        Samples random brightness and contrast change magnitudes and
+        applies them to the image.
+
+        Args:
+            image: 3D Image tensor, with shape (c, h, w)
+            label: Label for the image, which is unaltered
+            keypoints: 1D tensor with shape (8,) containing beam mask keypoints
+                       with format [x1, y1, x2, y2, x3, y3, x4, y4]
+            mask: Beam mask, with shape (1, h, w)
+            probe: Probe type of the image
+
+        Returns:
+            augmented image, label, keypoints, mask, probe type
+        """
+
+        # Sample random gamma
+        gamma = random.uniform(self.min_gamma, self.max_gamma)
+
+        # Apply brightness and contrast changes
+        new_image = tvf.adjust_gamma(image, gamma, self.gain)
+
+        # Mask and return image
+        new_image = (new_image * mask).to(torch.uint8)
+        return new_image, label, keypoints, mask, probe

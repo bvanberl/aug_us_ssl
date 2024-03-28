@@ -1,3 +1,4 @@
+import random
 from typing import Optional, List
 
 import numpy as np
@@ -256,8 +257,8 @@ class SaltAndPepperNoise(nn.Module):
 
         # Determine the number of pixels to shade white and black
         c, h, w = image.shape
-        n_salt = int((self.min_salt_frac + torch.rand(()) * (self.max_salt_frac - self.min_salt_frac)) * h * w)
-        n_pepper = int((self.min_pepper_frac + torch.rand(()) * (self.max_pepper_frac - self.min_pepper_frac)) * h * w)
+        n_salt = random.randint(int(h * w * self.min_salt_frac), int(h * w * self.max_salt_frac))
+        n_pepper = random.randint(int(h * w * self.min_pepper_frac), int(h * w * self.max_pepper_frac))
 
         # Add salt noise
         salt_locs = torch.randint(0, w * h - 1, size=(n_salt,))
@@ -276,7 +277,8 @@ class WaveletDenoise(nn.Module):
             wavelet_names: Optional[List[str]] = None,
             j: int = 3,
             j_0: int = 2,
-            alpha: float = 3.0
+            min_alpha: float = 2.5,
+            max_alpha: float = 3.5
     ):
         """Initializes the Wavelet Denoise layer.
 
@@ -285,17 +287,19 @@ class WaveletDenoise(nn.Module):
                 names in the pywavelets package
             j: Number of levels of wavelet decomposition
             j_0: Decomposition level for Birgé-Massart thresholding strategy
-            alpha: Scaling factor for Birgé-Massart thresholding strategy
+            min_alpha: Minimum scaling factor for Birgé-Massart thresholding strategy
+            max_alpha: Maximum scaling factor for Birgé-Massart thresholding strategy
         """
         assert j > 0, "j must be >= 0"
         assert j_0 < j, "j_0 must be a valid decomposition level < j"
-        assert alpha > 1., "alpha must be >= 1"
+        assert 1. <= min_alpha <= max_alpha, "alpha must be >= 1"
 
         super(WaveletDenoise, self).__init__()
 
         self.j = j
         self.j_0 = j_0
-        self.alpha = alpha
+        self.min_alpha = min_alpha
+        self.max_alpha = max_alpha
 
         if wavelet_names is not None:
             self.wavelet_names = wavelet_names
@@ -334,13 +338,16 @@ class WaveletDenoise(nn.Module):
             augmented image, label, keypoints, mask, probe type
         """
 
-        # Determine the number of pixels to shade white and black
+        # Randomly select mother wavelet and thresholding level
         idx = np.random.randint(0, len(self.wavelet_names))
+        alpha = random.uniform(self.min_alpha, self.max_alpha)
+
+        # Apply forward wavelet transform
         yl, yh = self.forward_dwts[idx](image.unsqueeze(0).float())
 
         m = yh[-1].shape[-1] * yh[-1].shape[-2] / 2
         for i in range(self.j_0):
-            thresh = m / (self.j_0 + 1 - i) ** self.alpha
+            thresh = m / (self.j_0 + 1 - i) ** alpha
             yh[i] = torch.sign(yh[i]) * torch.clamp(torch.abs(yh[i]) - thresh, min=0.)
 
         new_image = (self.inverse_dwts[idx]((yl, yh))).squeeze(0)

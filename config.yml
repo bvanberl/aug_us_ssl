@@ -13,10 +13,10 @@ data:
 
 pretrain:
   seed: 11
-  epochs: 20
+  epochs: 10
   batch_size: 512
   max_lr: 0.2
-  warmup_epochs: 2
+  warmup_epochs: 1
   weight_decay: 0.000001
   extractor: 'mobilenetv3'
   proj_nodes: [768, 768]

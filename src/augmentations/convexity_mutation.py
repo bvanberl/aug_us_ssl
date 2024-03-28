@@ -1,3 +1,5 @@
+import random
+
 import torch
 from torch import nn, Tensor
 from torchvision.transforms.v2 import functional as tvf, Transform
@@ -87,8 +89,7 @@ class ConvexityMutation(nn.Module):
         theta = get_angle_of_intersection(x3, y3, x4, y4, x_itn, y_itn)
 
         # Randomly sample the width fraction of the original beam
-        top_width = self.min_top_width + \
-                     torch.rand(()) * (self.max_top_width - self.min_top_width)
+        top_width = random.uniform(self.min_top_width, self.max_top_width)
         top_width_scale = top_width / (x2 - x1) * (x4 - x3)
         new_x1 = x_itn - (x_itn - x1) * top_width_scale
         new_x2 = x_itn + (x2 - x_itn) * top_width_scale

@@ -4,14 +4,10 @@ import torch
 import torchvision
 from torchvision.transforms import ToTensor, v2
 
-from src.augmentations import WaveletDenoise, BrightnessContrastChange, CLAHETransform, \
-    ProbeTypeChange, ConvexityMutation, DepthChange, SpeckleNoise, GaussianNoise, SaltAndPepperNoise
+from src.augmentations import *
+from src.constants import IMAGENET_MEAN, IMAGENET_STD
 
 torchvision.disable_beta_transforms_warning()
-
-IMAGENET_MEAN = [0.485, 0.456, 0.406]
-IMAGENET_STD = [0.229, 0.224, 0.225]
-
 
 def get_normalize_transform(
         mean_pixel_val: List[float] = None,
@@ -80,7 +76,7 @@ def get_byol_augmentations(
 
 
 def get_august_augmentations(
-        wavelet_denoise_prob: float = 0.5,
+        wavelet_denoise_prob: float = 0.333,
         brightness_contrast_prob: float = 0.5,
         clahe_prob: float = 0.2,
         probe_type_prob: float = 0.333,
@@ -111,17 +107,18 @@ def get_august_augmentations(
     """
     transforms = [
         v2.RandomApply(
-            [WaveletDenoise(j_0=2)],
+            [WaveletDenoise(j_0=2, j=3, min_alpha=2.5, max_alpha=3.5)],
             p=wavelet_denoise_prob
         ),
+        v2.RandomApply([GammaCorrection(min_gamma=0.5, max_gamma=2)], p=0.5),
         v2.RandomApply(
-            [BrightnessContrastChange(min_brightness=0.6, max_brightness=1.4, min_contrast=0.6, max_contrast=1.4)],
+            [BrightnessContrastChange(min_brightness=0.75, max_brightness=1.25, min_contrast=0.75, max_contrast=1.25)],
             p=brightness_contrast_prob
-        ),
-        v2.RandomApply(
-            [CLAHETransform(min_clip_limit=10, max_clip_limit=15, tile_grid_size=(6, 6))],
-            p=clahe_prob
-        ),
+        ),  
+        # v2.RandomApply(
+        #     [CLAHETransform(min_clip_limit=5, max_clip_limit=10, tile_grid_size=(6, 6))],
+        #     p=clahe_prob
+        # ),
         v2.RandomApply(
             [ProbeTypeChange(square_roi=True, min_linear_width_frac=1.0, max_linear_width_frac=1.0)],
             p=probe_type_prob
@@ -131,12 +128,12 @@ def get_august_augmentations(
             p=convexity_prob
         ),
         v2.RandomApply(
-            [DepthChange(min_depth_factor=1.0, max_depth_factor=1.25)],
+            [DepthChange(min_depth_factor=0.8, max_depth_factor=1.2)],
             p=depth_prob
         ),
         v2.RandomApply(
-            [SpeckleNoise(square_roi=True, min_lateral_res=50, max_lateral_res=100,
-                                   min_axial_res=50, max_axial_res=100, min_phasors=5, max_phasors=15)],
+            [SpeckleNoise(square_roi=True, min_lateral_res=20, max_lateral_res=30,
+                                   min_axial_res=55, max_axial_res=65, min_phasors=5, max_phasors=10)],
                       p=speckle_prob
         ),
         v2.RandomApply(
@@ -148,6 +145,7 @@ def get_august_augmentations(
                                                     max_pepper_frac=0.005)],
             p=sp_prob
         ),
+        v2.RandomApply([ShiftAndRotate(max_shift=0.15, max_rotation=22.5)], p=0.5),
         v2.ToDtype(torch.float32, scale=True),
         get_normalize_transform(mean_pixel_val, std_pixel_val)
     ]
