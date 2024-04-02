@@ -20,7 +20,7 @@ class WarmupCosineDecayLR(LRScheduler):
         self.total_steps = steps_per_epoch * total_epochs
         self.decay_steps = self.total_steps - self.warmup_steps
         self.max_lr = base_lr * batch_size / 256.
-        super().__init__(optimizer, last_epoch, verbose)
+        super(WarmupCosineDecayLR, self).__init__(optimizer, last_epoch, verbose)
 
     def get_lr(self) -> List[float]:
         step = self.last_epoch      # This is actually number of steps

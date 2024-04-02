@@ -328,9 +328,7 @@ class VICRegLoss(nn.Module):
         cov_term = self._covariance_term(z1, z2)
 
         # Calculate final loss as weighted sum of terms
-        loss = self.lambda_ * self.inv_term + \
-               self.mu * self.var_term + \
-               self.nu * self.cov_term
+        loss = self.lambda_ * inv_term + self.mu * var_term + self.nu * cov_term
 
         loggables = {
             "inv_term": inv_term,

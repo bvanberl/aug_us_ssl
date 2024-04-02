@@ -23,7 +23,7 @@ pretrain:
   use_bias: true
   imagenet_weights: true
   use_unlabelled: false
-  method: "simclr"
+  method: "vicreg"
   augment_pipeline: "august"
   n_cutoff_layers: 0
   views: ['parenchymal']

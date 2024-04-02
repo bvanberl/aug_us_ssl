@@ -4,7 +4,7 @@ from abc import abstractmethod
 import torch
 from torch.nn import Module
 from torch import Tensor
-import pytorch_lightning as pl
+import lightning as pl
 import torchsummary
 
 from src.models.extractors import get_extractor
@@ -141,7 +141,7 @@ class JointEmbeddingModel(pl.LightningModule):
             self.max_lr,
             self.batch_size
         )
-        return [optimizer], [scheduler]
+        return [optimizer], [{"scheduler": scheduler, "interval": "step"}]
 
     def summary(self):
         torchsummary.summary(self.extractor, input_size=self.input_shape)

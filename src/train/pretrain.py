@@ -5,11 +5,10 @@ import time
 import json
 
 import yaml
-import torch.distributed as dist
-import torchsummary
 import torchvision
-from pytorch_lightning import Trainer, seed_everything
-from pytorch_lightning.loggers import WandbLogger, TensorBoardLogger
+from lightning import Trainer, seed_everything
+from lightning.pytorch.loggers import WandbLogger, TensorBoardLogger
+from lightning.pytorch.callbacks import LearningRateMonitor
 
 from src.models.joint_embedding import JointEmbeddingModel
 from src.data.image_datasets import load_data_for_pretrain
@@ -34,13 +33,9 @@ if __name__ == '__main__':
                         help='Root directory containing splits information')
     parser.add_argument('--nodes', default=1, type=int, help='Number of nodes')
     parser.add_argument('--gpus_per_node', default=1, type=int, help='Number of GPUs per node')
-    parser.add_argument('--dist_url', default="localhost", type=str, help='URL used to set up distributed training')
-    parser.add_argument('--dist_backend', default='gloo', type=str, help='Backend for distributed package')
     parser.add_argument('--log_interval', default=1, type=int, help='Number of steps after which to log')
     parser.add_argument('--epochs', required=False, type=int, help='Number of pretraining epochs')
     parser.add_argument('--batch_size', required=False, type=int, help='Pretraining batch size')
-    parser.add_argument('--max_lr', required=False, type=float, help='Base learning rate')
-    parser.add_argument('--lambda_', required=False, default=None, type=float, help='Invariance term weight')
     parser.add_argument('--augment_pipeline', required=False, type=str, default=None, help='Augmentation pipeline')
     parser.add_argument('--num_workers', required=False, type=int, default=0, help='Number of workers for data loading')
     parser.add_argument('--seed', required=False, type=int, help='Random seed')
@@ -181,6 +176,9 @@ if __name__ == '__main__':
     if use_wandb:
         loggers.append(WandbLogger(log_model="all"))
 
+    # Create callbacks
+    callbacks = [LearningRateMonitor(logging_interval='step')]
+
     # Train the model
     trainer = Trainer(
         max_epochs=epochs,
@@ -188,7 +186,8 @@ if __name__ == '__main__':
         devices=num_gpus,
         num_nodes=num_nodes,
         logger=loggers,
-        default_root_dir=checkpoint_dir
+        default_root_dir=checkpoint_dir,
+        callbacks=callbacks
     )
     trainer.fit(model, train_loader, val_loader)
 

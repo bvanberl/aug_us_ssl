@@ -311,7 +311,7 @@ def load_data_for_pretrain(
             augment_pipeline="none",
             shuffle=False,
             channels=3,
-            n_workers=1,
+            n_workers=0,
             drop_last=False,
             **preprocess_kwargs
         )
