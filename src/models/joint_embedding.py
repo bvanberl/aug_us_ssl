@@ -4,7 +4,7 @@ from abc import abstractmethod
 import torch
 from torch.nn import Module
 from torch import Tensor
-import lightning as pl
+import pytorch_lightning as pl
 import torchsummary
 
 from src.models.extractors import get_extractor
@@ -125,10 +125,10 @@ class JointEmbeddingModel(pl.LightningModule):
         loss, loggables = self.loss(z0, z1)
 
         # Log the loss, loss components, standard deviation of embeddings
-        self.log(f"val/loss", loss)
-        self.log_dict({f"val/{key}": loggables[key] for key in loggables})
-        self.log(f"val/z0_std", z0.std(dim=1).mean())
-        self.log(f"val/z1_std", z1.std(dim=1).mean())
+        self.log(f"val/loss", loss, sync_dist=True)
+        self.log_dict({f"val/{key}": loggables[key] for key in loggables}, sync_dist=True)
+        self.log(f"val/z0_std", z0.std(dim=1).mean(), sync_dist=True)
+        self.log(f"val/z1_std", z1.std(dim=1).mean(), sync_dist=True)
         return loss
 
     def configure_optimizers(self):

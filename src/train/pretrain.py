@@ -6,9 +6,9 @@ import json
 
 import yaml
 import torchvision
-from lightning import Trainer, seed_everything
-from lightning.pytorch.loggers import WandbLogger, TensorBoardLogger
-from lightning.pytorch.callbacks import LearningRateMonitor
+from pytorch_lightning import Trainer, seed_everything
+from pytorch_lightning.loggers import WandbLogger, TensorBoardLogger
+from pytorch_lightning.callbacks import LearningRateMonitor
 
 from src.models.joint_embedding import JointEmbeddingModel
 from src.data.image_datasets import load_data_for_pretrain
@@ -39,7 +39,8 @@ if __name__ == '__main__':
     parser.add_argument('--augment_pipeline', required=False, type=str, default=None, help='Augmentation pipeline')
     parser.add_argument('--num_workers', required=False, type=int, default=0, help='Number of workers for data loading')
     parser.add_argument('--seed', required=False, type=int, help='Random seed')
-    parser.add_argument('--checkpoint_name', required=False, type=str, help='Augmentation pipeline')
+    parser.add_argument('--checkpoint_name', required=False, type=str, help='Checkpoint to resume from')
+    parser.add_argument('--labelled_only', required=False, type=int, default=1, help='Whether to use only examples with labels')
     args = vars(parser.parse_args())
     print(f"Args: {args}")
 
@@ -102,7 +103,7 @@ if __name__ == '__main__':
         splits_dir,
         batch_size,
         augment_pipeline=augment_pipeline,
-        use_unlabelled=cfg['pretrain']['use_unlabelled'],
+        use_unlabelled=bool(cfg['pretrain']['use_unlabelled']),
         n_workers=n_workers,
         **hparams
     )
@@ -187,7 +188,8 @@ if __name__ == '__main__':
         num_nodes=num_nodes,
         logger=loggers,
         default_root_dir=checkpoint_dir,
-        callbacks=callbacks
+        callbacks=callbacks,
+        log_every_n_steps=args['log_interval']
     )
     trainer.fit(model, train_loader, val_loader)
 
