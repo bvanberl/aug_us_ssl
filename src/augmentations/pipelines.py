@@ -67,7 +67,7 @@ def get_byol_augmentations(
         v2.RandomResizedCrop((height, width), scale=(0.08, 1.), antialias=True),
         v2.RandomHorizontalFlip(p=0.5),
         v2.RandomApply([v2.ColorJitter(0.4, 0.4, 0., 0.)], p=0.8),
-        v2.RandomApply([v2.GaussianBlur(23)], p=0.8),
+        v2.RandomApply([v2.GaussianBlur(11)], p=0.5),
         v2.RandomSolarize(0.5, p=0.1),
         v2.ToDtype(torch.float32, scale=True),
         get_normalize_transform(mean_pixel_val, std_pixel_val)
@@ -76,15 +76,17 @@ def get_byol_augmentations(
 
 
 def get_august_augmentations(
-        wavelet_denoise_prob: float = 0.333,
-        brightness_contrast_prob: float = 0.5,
-        clahe_prob: float = 0.2,
-        probe_type_prob: float = 0.333,
-        convexity_prob: float = 0.5,
-        depth_prob: float = 0.333,
-        speckle_prob: float = 0.333,
-        gaussian_prob: float = 0.333,
-        sp_prob: float = 0.2,
+        wavelet_denoise_prob: float = 0.25,
+        brightness_contrast_prob: float = 0.25,
+        gamma_prob: float = 0.25,
+        probe_type_prob: float = 0.2,
+        convexity_prob: float = 0.3,
+        depth_prob: float = 0.3,
+        speckle_prob: float = 0.3,
+        gaussian_prob: float = 0.3,
+        sp_prob: float = 0.15,
+        shift_rotate_prob: float = 0.25,
+        reflect_prob: float = 0.5,
         mean_pixel_val: List[float] = None,
         std_pixel_val: List[float] = None
 ):
@@ -101,6 +103,8 @@ def get_august_augmentations(
     :param speckle_prob: Probability of applying speckle noise augmentation
     :param gaussian_prob: Probability of applying Gaussian noise augmentation
     :param sp_prob: Probability of applying salt & pepper noise augmentation
+    :param shift_rotate_prob: Probability of random shift and rotation augmentation
+    :param reflect_prob: Probability of horizontal reflection augmentation
     :param mean_pixel_val: Channel-wise means
     :param std_pixel_val: Channel-wise standard deviation
     :return: Callable augmentation pipeline
@@ -110,9 +114,9 @@ def get_august_augmentations(
             [WaveletDenoise(j_0=2, j=3, min_alpha=2.5, max_alpha=3.5)],
             p=wavelet_denoise_prob
         ),
-        v2.RandomApply([GammaCorrection(min_gamma=0.5, max_gamma=2)], p=0.5),
+        v2.RandomApply([GammaCorrection(min_gamma=0.5, max_gamma=2)], p=gamma_prob),
         v2.RandomApply(
-            [BrightnessContrastChange(min_brightness=0.75, max_brightness=1.25, min_contrast=0.75, max_contrast=1.25)],
+            [BrightnessContrastChange(min_brightness=0.8, max_brightness=1.2, min_contrast=0.8, max_contrast=1.2)],
             p=brightness_contrast_prob
         ),  
         # v2.RandomApply(
@@ -120,7 +124,7 @@ def get_august_augmentations(
         #     p=clahe_prob
         # ),
         v2.RandomApply(
-            [ProbeTypeChange(square_roi=True, min_linear_width_frac=1.0, max_linear_width_frac=1.0)],
+            [ProbeTypeChange(square_roi=True, min_linear_width_frac=0.5, max_linear_width_frac=1.0)],
             p=probe_type_prob
         ),
         v2.RandomApply(
@@ -128,7 +132,7 @@ def get_august_augmentations(
             p=convexity_prob
         ),
         v2.RandomApply(
-            [DepthChange(min_depth_factor=0.8, max_depth_factor=1.2)],
+            [DepthChange(min_depth_factor=0.85, max_depth_factor=1.15)],
             p=depth_prob
         ),
         v2.RandomApply(
@@ -145,7 +149,8 @@ def get_august_augmentations(
                                                     max_pepper_frac=0.005)],
             p=sp_prob
         ),
-        v2.RandomApply([ShiftAndRotate(max_shift=0.15, max_rotation=22.5)], p=0.5),
+        v2.RandomApply([HorizontalReflection()], p=reflect_prob),
+        v2.RandomApply([ShiftAndRotate(max_shift=0.1, max_rotation=15)], p=shift_rotate_prob),
         v2.ToDtype(torch.float32, scale=True),
         get_normalize_transform(mean_pixel_val, std_pixel_val)
     ]

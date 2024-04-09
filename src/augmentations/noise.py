@@ -304,7 +304,7 @@ class WaveletDenoise(nn.Module):
         if wavelet_names is not None:
             self.wavelet_names = wavelet_names
         else:
-            self.wavelet_names = ["db2", "db5", "db30"]
+            self.wavelet_names = ["db2", "db5"]
 
         self.forward_dwts = []
         self.inverse_dwts = []

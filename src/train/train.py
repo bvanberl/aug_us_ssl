@@ -10,8 +10,10 @@ from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.loggers import WandbLogger, TensorBoardLogger
 from pytorch_lightning.callbacks import LearningRateMonitor
 
+from src.models.classifier import Classifier
 from src.models.joint_embedding import JointEmbeddingModel
-from src.data.image_datasets import load_data_for_pretrain
+from src.models.extractors import get_extractor
+from src.data.image_datasets import load_data_for_train
 from src.train.utils import *
 
 torchvision.disable_beta_transforms_warning()
@@ -26,16 +28,16 @@ else:
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
-    parser.add_argument('--method', required=False, type=str, help='SSL Pre-training method')
+    parser.add_argument('--linear', required=False, type=int, help='0 for fine-tuning, 1 for linear')
+    parser.add_argument('--extractor_weights', required=False, type=str, help='Path to saved joint embedding model')
     parser.add_argument('--image_dir', required=False, default='', type=str, help='Root directory containing images')
-    parser.add_argument('--mask_dir', required=False, default='', type=str, help='Root directory containing masks')
     parser.add_argument('--splits_dir', required=False, default='', type=str,
                         help='Root directory containing splits information')
     parser.add_argument('--nodes', default=1, type=int, help='Number of nodes')
     parser.add_argument('--gpus_per_node', default=1, type=int, help='Number of GPUs per node')
     parser.add_argument('--log_interval', default=1, type=int, help='Number of steps after which to log')
-    parser.add_argument('--epochs', required=False, type=int, help='Number of pretraining epochs')
-    parser.add_argument('--batch_size', required=False, type=int, help='Pretraining batch size')
+    parser.add_argument('--epochs', required=False, type=int, help='Number of epochs')
+    parser.add_argument('--batch_size', required=False, type=int, help='Batch size')
     parser.add_argument('--augment_pipeline', required=False, type=str, default=None, help='Augmentation pipeline')
     parser.add_argument('--num_workers', required=False, type=int, default=0, help='Number of workers for data loading')
     parser.add_argument('--seed', required=False, type=int, help='Random seed')
@@ -47,7 +49,7 @@ if __name__ == '__main__':
     num_nodes = args['nodes']
     num_gpus = args['gpus_per_node']
     world_size = num_nodes * num_gpus
-    seed = args['seed'] if args['seed'] else cfg['pretrain']['seed']
+    seed = args['seed'] if args['seed'] else cfg['train']['seed']
     n_workers = args["num_workers"]
     seed_everything(seed, n_workers > 0)
 
@@ -55,57 +57,37 @@ if __name__ == '__main__':
     for k in cfg['data']:
         if k in args and args[k] is not None:
             cfg['data'][k] = args[k]
-    for k in cfg['pretrain']:
+    for k in cfg['train']:
         if k in args and args[k] is not None:
-            cfg['pretrain'][k] = args[k]
+            cfg['train'][k] = args[k]
     print(f"Config after parsing args: {cfg}")
-
-    # Determine SSL method and any associated hyperparameters
-    method = cfg['pretrain']['method'].lower()
-    assert method in ['simclr', 'barlow_twins', 'vicreg'], \
-        f"Unsupported pretraining method: {method}"
-    hparams = {k.lower(): v for k, v in cfg['pretrain']['hparams'].pop(method.lower()).items()}
-    for k in args:
-        if k in hparams and args[k] is not None:
-            hparams[k] = args[k]
 
     # Specify image directory, splits CSV directory, image shape, batch size
     image_dir = args['image_dir'] if args['image_dir'] else cfg["paths"]["images"]
-    mask_dir = args['mask_dir'] if args['mask_dir'] else cfg["paths"]["masks"]
     splits_dir = args['splits_dir'] if args['splits_dir'] else cfg["paths"]["splits"]
     height = cfg['data']['height']
     width = cfg['data']['width']
     channels = 3
     img_dim = (channels, height, width)
-    batch_size = cfg['pretrain']['batch_size']
+    batch_size = cfg['train']['batch_size']
+    label_name = cfg['train']['label']
 
     # Determine data augmentation pipeline
     if args["augment_pipeline"] is not None:
         augment_pipeline = args["augment_pipeline"]
     else:
-        augment_pipeline = cfg['pretrain']['augment_pipeline']
-    # if augment_pipeline == 'august':
-    #     aug_params = cfg['augment'][augment_pipeline]
-    #     for k in aug_params:
-    #         if k in args and args[k] is not None:
-    #             aug_params[k] = args[k]
-    #     hparams['augmentation'] = aug_params
-    # else:
-    #     hparams['augmentation'] = {}
-    print(f"Method hyperparameters: {hparams}")
+        augment_pipeline = cfg['train']['augment_pipeline']
 
     # Create training and validation data loaders
-    train_loader, val_loader = load_data_for_pretrain(
+    train_loader, val_loader = load_data_for_train(
         image_dir,
-        mask_dir,
+        label_name,
         width,
         height,
         splits_dir,
         batch_size,
         augment_pipeline=augment_pipeline,
-        use_unlabelled=not bool(cfg['pretrain']['labelled_only']),
-        n_workers=n_workers,
-        **hparams
+        n_workers=n_workers
     )
 
     # Finalize run configuration
@@ -113,63 +95,66 @@ if __name__ == '__main__':
         'seed': seed
     }
     run_cfg.update(cfg['data'])
-    run_cfg.update(cfg['pretrain'])
+    run_cfg.update(cfg['train'])
     run_cfg = {k.lower(): v for k, v in run_cfg.items()}
-    run_cfg.update(hparams)
 
     # Initialize wandb run
+    train_type_tag = "linear" if cfg['train']['linear'] else "fine-tune"
     use_wandb = wandb_cfg["mode"] == "online"
     resume_id = wandb_cfg["resume_id"]
     if use_wandb:
         wandb_run = wandb.init(
             project=wandb_cfg['project'],
-            job_type=f"pretrain",
+            job_type=f"train",
             entity=wandb_cfg['entity'],
             config=run_cfg,
             sync_tensorboard=False,
-            tags=["pretrain", method],
+            tags=["classification", train_type_tag],
             id=resume_id
         )
         print(f"Run config: {wandb_run}")
-        model_artifact = wandb.Artifact(f"pretrained_{method}", type="model")
+        model_artifact = wandb.Artifact(f"trained_{train_type_tag}", type="model")
     else:
         wandb_run = None
         model_artifact = None
 
-    # Define model for pretraining. Includes feature extractor and projector.
+    # Define classifier for training.
     if args['checkpoint_path']:
         # Resume from checkpoint
-        model = JointEmbeddingModel.load_from_checkpoint(args['checkpoint_path'])
+        model = Classifier.load_from_checkpoint(args['checkpoint_path'])
         checkpoint_dir = os.path.dirname(args['checkpoint_path'])
         epochs = model.scheduler_epochs
         load_ckpt_path = args['checkpoint_path']
 
     else:
-        # Define new model
-        epochs = cfg['pretrain']['epochs']
+        # Define new model using a checkpoint
+        epochs = cfg['train']['epochs']
         batches_per_epoch = len(train_loader)
-        model = JointEmbeddingModel(
-            method,
-            hparams,
+
+        # Create feature extractor
+        if cfg['train']['extractor_weights'] == 'scratch':
+            extractor = get_extractor(cfg['train']['extractor'], False)
+        elif cfg['train']['extractor_weights'] == 'imagenet':
+            extractor = get_extractor(cfg['train']['extractor'], True)
+        else:
+            je_model = JointEmbeddingModel.load_from_checkpoint(cfg['train']['extractor_weights'])
+            extractor = je_model.extractor
+
+        n_classes = train_loader.dataset.n_classes
+        model = Classifier(
+            extractor,
             img_dim,
-            cfg['pretrain']['extractor'],
-            cfg['pretrain']['imagenet_weights'],
-            cfg['pretrain']['proj_nodes'],
-            batch_size,
-            batches_per_epoch,
-            cfg['pretrain']['max_lr'],
-            extractor_cutoff_layers=cfg['pretrain']['n_cutoff_layers'],
-            projector_bias=cfg['pretrain']['use_bias'],
-            weight_decay=cfg['pretrain']['weight_decay'],
-            warmup_epochs=cfg['pretrain']['warmup_epochs'],
-            scheduler_epochs=epochs,
-            world_size=world_size
+            n_classes,
+            cfg['train']['lr'],
+            epochs,
+            cfg['train']['weight_decay'],
+            bool(cfg['train']['linear'])
         )
         #model.summary()
 
         # Set checkpoint/log dir and save the run config as a JSON file
         date = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-        checkpoint_dir = os.path.join(cfg['paths']['model_weights'], 'pretrained', method, date)
+        checkpoint_dir = os.path.join(cfg['paths']['model_weights'], 'classifiers', label_name, date)
         os.makedirs(checkpoint_dir, exist_ok=True)
         print(f"Checkpoint Dir: {checkpoint_dir}")
         run_cfg_path = os.path.join(checkpoint_dir, "run_cfg.json")

@@ -22,8 +22,8 @@ pretrain:
   proj_nodes: [768, 768]
   use_bias: true
   imagenet_weights: true
-  use_unlabelled: false
-  method: "vicreg"
+  labelled_only: true
+  method: "simclr"
   augment_pipeline: "august"
   n_cutoff_layers: 0
   views: ['parenchymal']
@@ -36,6 +36,19 @@ pretrain:
       lambda_: 25.0
       mu: 25.0
       nu: 1.0
+
+train:
+  seed: 11
+  label: 'ab_lines_label'
+  linear: true
+  epochs: 10
+  batch_size: 512
+  lr: 0.2
+  weight_decay: 0.000001
+  extractor: 'mobilenetv3'
+  extractor_weights: "imagenet"
+  augment_pipeline: "none"
+  views: ['parenchymal']
 
 augment:
   august:

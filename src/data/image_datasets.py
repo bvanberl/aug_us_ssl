@@ -61,10 +61,13 @@ class ImagePretrainDataset(Dataset):
         probe_type = self.probe_types[idx]
 
         # Apply data augmentation transforms
-        if self.transforms1:
-            x1 = self.transforms1(x1, label, keypoints, mask, probe_type)[0]
-        if self.transforms2:
-            x2 = self.transforms2(x2, label, keypoints, mask, probe_type)[0]
+        try:
+            if self.transforms1:
+                x1 = self.transforms1(x1, label, keypoints, mask, probe_type)[0]
+            if self.transforms2:
+                x2 = self.transforms2(x2, label, keypoints, mask, probe_type)[0]
+        except Exception:
+            print(image_path)
         return x1, x2
 
 
@@ -82,11 +85,12 @@ class ImageClassificationDataset(Dataset):
         self.image_paths = [p.replace("\\", "/") for p in img_paths]
         self.img_ext = img_ext
         self.img_root_dir = img_root_dir
+        self.n_classes = n_classes
         if n_classes > 2:
             self.labels = one_hot(torch.from_numpy(labels), num_classes=n_classes)
         else:
-            self.labels = np.expand_dims(labels, axis=-1).astype(np.float32)
-        self.label_freqs = np.bincount(labels[labels != -1]) / labels.shape[0]
+            self.labels = torch.from_numpy(np.expand_dims(labels, axis=-1).astype(np.float32))
+        self.label_freqs = np.unique(labels, return_counts=True)[1] / len(labels)
         self.transforms = transforms
         self.cardinality = len(self.image_paths)
 
@@ -204,6 +208,66 @@ def prepare_pretrain_dataloader(
     return data_loader
 
 
+def prepare_train_dataloader(
+        img_root: str,
+        label_name: str,
+        file_df: pd.DataFrame,
+        batch_size: int,
+        width: int,
+        height: int,
+        augment_pipeline: str = "august",
+        shuffle: bool = False,
+        n_workers: int = 0,
+        drop_last: bool = False,
+        **preprocess_kwargs
+) -> DataLoader:
+    '''
+    Constructs a dataset for a classifier.
+    :param img_root: Root directory in which all images are stored. Will be prepended to path in frames table.
+    :param label_name: Name of label column
+    :param file_df: A table of US image properties
+    :param batch_size: Batch size for pretraining
+    :param width: Desired width of US images
+    :param height: Desired height of US images
+    :param augment: If True, applies data augmentation transforms to the inputs
+    :param shuffle: Flag indicating whether to shuffle the dataset
+    :param channels: Number of channels
+    :param max_time_delta: Maximum temporal separation of two frames
+    :param n_workers: Number of workers for preloading batches
+    :param world_size: Number of processes. If 1, then not using distributed mode
+    :param drop_last: If True, drops the last batch in the data loader if smaller than the batch size
+    :param preprocess_kwargs: Keyword arguments for preprocessing
+    :return: A batched dataset ready for iterating over preprocessed batches
+    '''
+
+    # Construct the dataset
+    augmentations, _ = get_augmentation_transforms_pretrain(
+        augment_pipeline,
+        height,
+        width,
+        #**preprocess_kwargs["augmentation"]
+    )
+
+    n_classes = file_df[label_name].nunique()
+    dataset = ImageClassificationDataset(
+        img_root,
+        file_df['filepath'].tolist(),
+        file_df[label_name].tolist(),
+        n_classes,
+        transforms=augmentations
+    )
+
+    data_loader = DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=shuffle,
+        num_workers=n_workers,
+        drop_last=drop_last,
+        pin_memory=True
+    )
+    return data_loader
+
+
 def load_data_for_pretrain(
         image_dir: str,
         mask_dir: str,
@@ -304,6 +368,97 @@ def load_data_for_pretrain(
         val_loader = prepare_pretrain_dataloader(
             image_dir,
             mask_dir,
+            val_frames_df,
+            batch_size,
+            width,
+            height,
+            augment_pipeline="none",
+            shuffle=False,
+            channels=3,
+            n_workers=0,
+            drop_last=False,
+            **preprocess_kwargs
+        )
+    else:
+        val_loader = None
+
+    return train_loader, val_loader
+
+
+def load_data_for_train(
+        image_dir: str,
+        label_name: str,
+        width: int,
+        height: int,
+        splits_dir: str,
+        batch_size: int,
+        augment_pipeline: str = "august",
+        n_workers: int = 0,
+        **preprocess_kwargs
+) -> (DataLoader, pd.DataFrame):
+    """
+    Retrieve data, data splits, and returns an iterable preprocessed dataset for pretraining
+    :param cfg: The config.yaml file dictionary
+    :param batch_size: Batch size for datasets
+    :param run: The wandb run object that is initialized
+    :param data_artifact_name: Artifact name for raw data and files
+    :param data_version: Artifact version for raw data
+    :param splits_artifact_name: Artifact name for train/val/test splits
+    :param splits_version: Artifact version for train/val/test splits
+    :param redownload_data: Flag indicating whether the dataset artifact should be redownloaded
+    :param augment_pipeline: Augmentation strategy identifier
+    :param use_unlabelled: Flag indicating whether to use the unlabelled data in
+    :param channels: Number of channels
+    :param max_pixel_val: Maximum value for pixel intensity
+    :param width: Desired width of images
+    :param height: Desired height of images
+    :param preprocess_kwargs: Keyword arguments for preprocessing
+    :return: dataset for pretraining
+    """
+
+    # Load data for training
+    train_frames_path = os.path.join(splits_dir, f'train_set_frames.csv')
+    train_clips_path = os.path.join(splits_dir, 'train_set_clips.csv')
+    if os.path.exists(train_frames_path) and os.path.exists(train_clips_path):
+        train_frames_df = pd.read_csv(train_frames_path)
+        train_clips_df = pd.read_csv(train_clips_path)
+    else:
+        train_frames_df = pd.DataFrame()
+        train_clips_df = pd.DataFrame()
+    train_clips_df = train_clips_df.loc[train_clips_df[label_name] != -1]
+    train_frames_df = train_frames_df.loc[train_frames_df[label_name] != -1]
+    print("Training clips:\n", train_clips_df.describe())
+
+    val_frames_path = os.path.join(splits_dir, f'val_set_frames.csv')
+    val_clips_path = os.path.join(splits_dir, 'val_set_clips.csv')
+    if os.path.exists(val_frames_path) and os.path.exists(val_clips_path):
+        val_frames_df = pd.read_csv(val_frames_path)
+        val_clips_df = pd.read_csv(val_clips_path)
+    else:
+        val_frames_df = pd.DataFrame()
+        val_clips_df = pd.DataFrame()
+    val_clips_df = val_clips_df.loc[val_clips_df[label_name] != -1]
+    val_frames_df = val_frames_df.loc[val_frames_df[label_name] != -1]
+    print("Validation clips:\n", val_clips_df.describe())
+
+    train_loader = prepare_train_dataloader(
+        image_dir,
+        label_name,
+        train_frames_df,
+        batch_size,
+        width,
+        height,
+        augment_pipeline=augment_pipeline,
+        shuffle=True,
+        channels=3,
+        n_workers=n_workers,
+        drop_last=True,
+        **preprocess_kwargs
+    )
+    if val_frames_df.shape[0] > 0:
+        val_loader = prepare_train_dataloader(
+            image_dir,
+            label_name,
             val_frames_df,
             batch_size,
             width,

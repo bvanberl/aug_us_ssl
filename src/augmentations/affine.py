@@ -157,3 +157,62 @@ class ShiftAndRotate(nn.Module):
         new_keypoints = new_homogenous_kp[:, :2].flatten()
 
         return new_image, label, new_keypoints, new_mask, probe
+
+
+class HorizontalReflection(nn.Module):
+    """Transformation that randomly reflects an ultrasound
+    image hozizontally.
+    """
+
+    def __init__(
+            self,
+    ):
+        """Initializes the ShiftAndRotate layer.
+
+        Args:
+            p_reflect: Probability of horizontal reflection
+        """
+        super(HorizontalReflection, self).__init__()
+
+    def forward(
+            self,
+            image: Tensor,
+            label: Tensor,
+            keypoints: Tensor,
+            mask: Tensor,
+            probe: Tensor,
+            **kwargs
+    ) -> (Tensor, Tensor, Tensor, Tensor):
+        """Horizontally reflects the input image
+
+        Reflects the image and updates the keypoints
+
+        Args:
+            image: 3D Image tensor, with shape (c, h, w)
+            label: Label for the image, which is unaltered
+            keypoints: 1D tensor with shape (8,) containing beam mask keypoints
+                       with format [x1, y1, x2, y2, x3, y3, x4, y4]
+            mask: Beam mask, with shape (1, h, w)
+            probe: Probe type of the image
+
+        Returns:
+            augmented image, label, keypoints, mask, probe type
+        """
+
+        # Perform transform that reflects image horizontally
+        new_image = tvf.horizontal_flip(image)
+        new_mask = tvf.horizontal_flip(mask)
+
+        # Swap x1 <--> x2 and x3 <--> x4
+        new_keypoints = torch.tensor([
+            keypoints[2],
+            keypoints[1],
+            keypoints[0],
+            keypoints[3],
+            keypoints[6],
+            keypoints[5],
+            keypoints[4],
+            keypoints[7]
+        ])
+
+        return new_image, label, new_keypoints, new_mask, probe

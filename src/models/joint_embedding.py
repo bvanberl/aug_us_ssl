@@ -4,7 +4,7 @@ from abc import abstractmethod
 import torch
 from torch.nn import Module
 from torch import Tensor
-import lightning as pl
+import pytorch_lightning as pl
 import torchsummary
 
 from src.models.extractors import get_extractor
@@ -54,6 +54,7 @@ class JointEmbeddingModel(pl.LightningModule):
         assert warmup_epochs <= scheduler_epochs, \
             "Number of warmup epochs cannot exeed scheduler epochs"
         super().__init__()
+        self.save_hyperparameters()
 
         # Define the self-supervised loss
         if method.lower() == 'simclr':
@@ -112,7 +113,9 @@ class JointEmbeddingModel(pl.LightningModule):
         self.log_dict({f"train/{key}": loggables[key] for key in loggables})
         self.log(f"train/z0_std", z0.std(dim=1).mean())
         self.log(f"train/z1_std", z1.std(dim=1).mean())
-        return loss
+
+        pbar_metrics = loggables.update({'loss': loss})
+        return pbar_metrics
 
     def validation_step(self, batch, batch_idx):
         x0, x1 = batch
@@ -129,7 +132,9 @@ class JointEmbeddingModel(pl.LightningModule):
         self.log_dict({f"val/{key}": loggables[key] for key in loggables})
         self.log(f"val/z0_std", z0.std(dim=1).mean())
         self.log(f"val/z1_std", z1.std(dim=1).mean())
-        return loss
+
+        pbar_metrics = loggables.update({'loss': loss})
+        return pbar_metrics
 
     def configure_optimizers(self):
         optimizer = LARS(self.parameters(), lr=0, weight_decay=self.weight_decay)
