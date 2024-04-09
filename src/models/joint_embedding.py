@@ -128,13 +128,12 @@ class JointEmbeddingModel(pl.LightningModule):
         loss, loggables = self.loss(z0, z1)
 
         # Log the loss, loss components, standard deviation of embeddings
-        self.log(f"val/loss", loss)
-        self.log_dict({f"val/{key}": loggables[key] for key in loggables})
-        self.log(f"val/z0_std", z0.std(dim=1).mean())
-        self.log(f"val/z1_std", z1.std(dim=1).mean())
+        self.log(f"val/loss", loss, sync_dist=True, prog_bar=True)
+        self.log_dict({f"val/{key}": loggables[key] for key in loggables}, sync_dist=True, prog_bar=True)
+        self.log(f"val/z0_std", z0.std(dim=1).mean(), sync_dist=True)
+        self.log(f"val/z1_std", z1.std(dim=1).mean(), sync_dist=True)
 
-        pbar_metrics = loggables.update({'loss': loss})
-        return pbar_metrics
+        return loss
 
     def configure_optimizers(self):
         optimizer = LARS(self.parameters(), lr=0, weight_decay=self.weight_decay)

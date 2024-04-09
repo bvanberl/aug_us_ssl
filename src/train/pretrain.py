@@ -41,6 +41,7 @@ if __name__ == '__main__':
     parser.add_argument('--seed', required=False, type=int, help='Random seed')
     parser.add_argument('--checkpoint_path', required=False, type=str, help='Checkpoint to resume from')
     parser.add_argument('--labelled_only', required=False, type=int, help='Whether to use only examples with labels')
+
     args = vars(parser.parse_args())
     print(f"Args: {args}")
 
