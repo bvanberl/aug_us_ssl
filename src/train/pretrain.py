@@ -8,7 +8,7 @@ import yaml
 import torchvision
 from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.loggers import WandbLogger, TensorBoardLogger
-from pytorch_lightning.callbacks import LearningRateMonitor
+from pytorch_lightning.callbacks import LearningRateMonitor, DeviceStatsMonitor
 
 from src.models.joint_embedding import JointEmbeddingModel
 from src.data.image_datasets import load_data_for_pretrain
@@ -39,7 +39,8 @@ if __name__ == '__main__':
     parser.add_argument('--augment_pipeline', required=False, type=str, default=None, help='Augmentation pipeline')
     parser.add_argument('--num_workers', required=False, type=int, default=0, help='Number of workers for data loading')
     parser.add_argument('--seed', required=False, type=int, help='Random seed')
-    parser.add_argument('--checkpoint_path', required=False, type=str, help='Checkpoint to resume from')
+    parser.add_argument('--checkpoint_dir', required=False, type=str, help='Directory in which to save checkpoints')
+    parser.add_argument('--resume_checkpoint', required=False, type=str, help='Checkpoint to resume from')
     parser.add_argument('--labelled_only', required=False, type=int, help='Whether to use only examples with labels')
 
     args = vars(parser.parse_args())
@@ -138,12 +139,12 @@ if __name__ == '__main__':
         model_artifact = None
 
     # Define model for pretraining. Includes feature extractor and projector.
-    if args['checkpoint_path']:
+    if args['resume_checkpoint']:
         # Resume from checkpoint
-        model = JointEmbeddingModel.load_from_checkpoint(args['checkpoint_path'])
-        checkpoint_dir = os.path.dirname(args['checkpoint_path'])
-        epochs = model.scheduler_epochs
         load_ckpt_path = args['checkpoint_path']
+        model = JointEmbeddingModel.load_from_checkpoint(load_ckpt_path)
+        checkpoint_dir = os.path.dirname(load_ckpt_path)
+        epochs = model.scheduler_epochs
 
     else:
         # Define new model
@@ -170,7 +171,10 @@ if __name__ == '__main__':
 
         # Set checkpoint/log dir and save the run config as a JSON file
         date = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-        checkpoint_dir = os.path.join(cfg['paths']['model_weights'], 'pretrained', method, date)
+        if args['checkpoint_dir']:
+            checkpoint_dir = args['checkpoint_dir']
+        else:
+            checkpoint_dir = os.path.join(cfg['paths']['model_weights'], 'pretrained', method, date)
         os.makedirs(checkpoint_dir, exist_ok=True)
         print(f"Checkpoint Dir: {checkpoint_dir}")
         run_cfg_path = os.path.join(checkpoint_dir, "run_cfg.json")
@@ -186,7 +190,10 @@ if __name__ == '__main__':
         loggers.append(WandbLogger(log_model="all"))
 
     # Create callbacks
-    callbacks = [LearningRateMonitor(logging_interval='step')]
+    callbacks = [
+        LearningRateMonitor(logging_interval='step'),
+        DeviceStatsMonitor()
+    ]
 
     # Train the model
     trainer = Trainer(

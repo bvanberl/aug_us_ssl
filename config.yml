@@ -21,7 +21,7 @@ pretrain:
   extractor: 'mobilenetv3'
   proj_nodes: [768, 768]
   use_bias: true
-  imagenet_weights: true
+  imagenet_weights: false
   labelled_only: true
   method: "simclr"
   augment_pipeline: "august"

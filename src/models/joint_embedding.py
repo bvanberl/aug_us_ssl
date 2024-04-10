@@ -55,15 +55,16 @@ class JointEmbeddingModel(pl.LightningModule):
             "Number of warmup epochs cannot exeed scheduler epochs"
         super().__init__()
         self.save_hyperparameters()
+        self.distributed = world_size > 1
 
         # Define the self-supervised loss
         if method.lower() == 'simclr':
-            self.loss = SimCLRLoss(tau=hparams["tau"], distributed=(world_size > 1))
+            self.loss = SimCLRLoss(tau=hparams["tau"], distributed=self.distributed)
         elif method.lower() == 'barlow_twins':
-            self.loss = BarlowTwinsLoss(batch_size, lambda_=hparams["lambda_"], distributed=(world_size > 1))
+            self.loss = BarlowTwinsLoss(batch_size, lambda_=hparams["lambda_"], distributed=self.distributed)
         elif method.lower() == 'vicreg':
             self.loss = VICRegLoss(batch_size, lambda_=hparams["lambda_"], mu=hparams["mu"], nu=hparams["nu"],
-                                 distributed=(world_size > 1))
+                                 distributed=self.distributed)
         else:
             raise NotImplementedError(f'{method} is not currently supported.')
 
@@ -109,13 +110,12 @@ class JointEmbeddingModel(pl.LightningModule):
         loss, loggables = self.loss(z0, z1)
 
         # Log the loss, loss components, standard deviation of embeddings
-        self.log(f"train/loss", loss)
-        self.log_dict({f"train/{key}": loggables[key] for key in loggables})
-        self.log(f"train/z0_std", z0.std(dim=1).mean())
-        self.log(f"train/z1_std", z1.std(dim=1).mean())
+        self.log(f"train/loss", loss, prog_bar=True, on_step=True, on_epoch=True)
+        self.log_dict({f"train/{key}": loggables[key] for key in loggables}, prog_bar=True, on_step=True, on_epoch=True)
+        self.log(f"train/z0_std", z0.std(dim=1).mean(), on_step=True, on_epoch=True)
+        self.log(f"train/z1_std", z1.std(dim=1).mean(), on_step=True, on_epoch=True)
 
-        pbar_metrics = loggables.update({'loss': loss})
-        return pbar_metrics
+        return loss
 
     def validation_step(self, batch, batch_idx):
         x0, x1 = batch
@@ -128,10 +128,10 @@ class JointEmbeddingModel(pl.LightningModule):
         loss, loggables = self.loss(z0, z1)
 
         # Log the loss, loss components, standard deviation of embeddings
-        self.log(f"val/loss", loss, sync_dist=True, prog_bar=True)
-        self.log_dict({f"val/{key}": loggables[key] for key in loggables}, sync_dist=True, prog_bar=True)
-        self.log(f"val/z0_std", z0.std(dim=1).mean(), sync_dist=True)
-        self.log(f"val/z1_std", z1.std(dim=1).mean(), sync_dist=True)
+        self.log(f"val/loss", loss, sync_dist=self.distributed, prog_bar=True, on_step=True, on_epoch=True)
+        self.log_dict({f"val/{key}": loggables[key] for key in loggables}, sync_dist=self.distributed, prog_bar=True, on_step=True, on_epoch=True)
+        self.log(f"val/z0_std", z0.std(dim=1).mean(), sync_dist=self.distributed, on_step=True, on_epoch=True)
+        self.log(f"val/z1_std", z1.std(dim=1).mean(), sync_dist=self.distributed, on_step=True, on_epoch=True)
 
         return loss
 
