@@ -21,12 +21,11 @@ pretrain:
   extractor: 'mobilenetv3'
   proj_nodes: [768, 768]
   use_bias: true
-  imagenet_weights: false
+  imagenet_weights: true
   labelled_only: true
   method: "simclr"
   augment_pipeline: "august"
   n_cutoff_layers: 0
-  views: ['parenchymal']
   hparams:
     simclr:
       tau: 0.1
@@ -39,16 +38,16 @@ pretrain:
 
 train:
   seed: 11
-  label: 'ab_lines_label'
+  label: 'pe_label'
   linear: true
   epochs: 10
   batch_size: 512
-  lr: 0.2
+  lr_head: 0.02
+  lr_extractor: 0
   weight_decay: 0.000001
   extractor: 'mobilenetv3'
   extractor_weights: "imagenet"
-  augment_pipeline: "none"
-  views: ['parenchymal']
+  augment_pipeline: "supervised"
 
 augment:
   august:

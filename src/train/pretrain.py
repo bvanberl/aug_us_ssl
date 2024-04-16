@@ -141,7 +141,7 @@ if __name__ == '__main__':
     # Define model for pretraining. Includes feature extractor and projector.
     if args['resume_checkpoint']:
         # Resume from checkpoint
-        load_ckpt_path = args['checkpoint_path']
+        load_ckpt_path = args['resume_checkpoint']
         model = JointEmbeddingModel.load_from_checkpoint(load_ckpt_path)
         checkpoint_dir = os.path.dirname(load_ckpt_path)
         epochs = model.scheduler_epochs
@@ -206,7 +206,8 @@ if __name__ == '__main__':
         callbacks=callbacks,
         log_every_n_steps=args['log_interval']
     )
-    trainer.fit(model, train_loader, val_loader, ckpt_path=load_ckpt_path)
+    #trainer.fit(model, train_loader, val_loader, ckpt_path=load_ckpt_path)
+    trainer.fit(model, train_loader, ckpt_path=load_ckpt_path)
 
     if use_wandb:
         wandb.finish()

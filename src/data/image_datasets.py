@@ -119,35 +119,30 @@ def get_augmentation_transforms_pretrain(
         height: int,
         width: int,
         **augment_kwargs
-) -> (Compose, Compose):
+) -> Compose:
     """Get augmentation transformation pipelines
 
     :param pipeline: Name of pipeline.
-                     One of {'byol', 'august', or 'none'}
+                     One of {'byol', 'august', 'supervised', or 'none'}
     :param height: Image height
     :param width: Image width
     :param pipeline_kwargs: Pipeline keyword arguments
     :return: Augmentation pipelines for first and second images
     """
     pipeline = pipeline.lower()
-    if pipeline == "byol":
-        return (
-            get_byol_augmentations(height, width),
-            get_byol_augmentations(height, width)
-        )
+    if pipeline == "byol_original":
+        return get_original_byol_augmentations(height, width)
+    if pipeline == "byol_grayscale":
+        return get_grayscale_byol_augmentations(height, width)
     elif pipeline == "august":
-        return (
-            get_august_augmentations(**augment_kwargs),
-            get_august_augmentations(**augment_kwargs)
-        )
+        return get_august_augmentations(**augment_kwargs)
+    elif pipeline == "supervised":
+        return get_supervised_augmentations(height, width, **augment_kwargs)
     else:
         if pipeline != "none":
             print(f"Unrecognized augmentation pipeline: {pipeline}.\n"
                             f"No augmentations will be applied.")
-        return (
-            get_validation_scaling(),
-            get_validation_scaling(),
-        )
+        return get_validation_scaling()
 
 
 def prepare_pretrain_dataloader(
@@ -182,11 +177,17 @@ def prepare_pretrain_dataloader(
     '''
 
     # Construct the dataset
-    augment1, augment2 = get_augmentation_transforms_pretrain(
+    augment1 = get_augmentation_transforms_pretrain(
         augment_pipeline,
         height,
         width,
         #**preprocess_kwargs["augmentation"]
+    )
+    augment2 = get_augmentation_transforms_pretrain(
+        augment_pipeline,
+        height,
+        width,
+        # **preprocess_kwargs["augmentation"]
     )
 
     dataset = ImagePretrainDataset(
@@ -241,11 +242,10 @@ def prepare_train_dataloader(
     '''
 
     # Construct the dataset
-    augmentations, _ = get_augmentation_transforms_pretrain(
+    augmentations = get_augmentation_transforms_pretrain(
         augment_pipeline,
         height,
-        width,
-        #**preprocess_kwargs["augmentation"]
+        width
     )
 
     n_classes = file_df[label_name].nunique()
@@ -464,7 +464,7 @@ def load_data_for_train(
             width,
             height,
             augment_pipeline="none",
-            shuffle=False,
+            shuffle=True,
             channels=3,
             n_workers=0,
             drop_last=False,

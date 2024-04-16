@@ -145,7 +145,8 @@ if __name__ == '__main__':
             extractor,
             img_dim,
             n_classes,
-            cfg['train']['lr'],
+            cfg['train']['lr_head'],
+            cfg['train']['lr_extractor'],
             epochs,
             cfg['train']['weight_decay'],
             bool(cfg['train']['linear'])
