@@ -1,5 +1,6 @@
 *.pem
 venv/
+data/
 .idea/
 .git/
 wandb.yml
@@ -10,6 +11,7 @@ artifacts/
 *.sh
 outfiles/
 *.ipynb
+core*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

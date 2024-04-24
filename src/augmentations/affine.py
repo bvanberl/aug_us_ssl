@@ -17,17 +17,22 @@ class DepthChange(nn.Module):
     def __init__(
             self,
             min_depth_factor: float = 0.8,
-            max_depth_factor: float = 1.2
+            max_depth_factor: float = 1.2,
+            preserve_beam_shape: bool = False
     ):
         """Initializes the DepthChange noise layer.
 
         Args:
             min_depth_factor: Minimum depth change factor
             max_depth_factor: Maximum depth change factor
+            preserve_beam_shape: If True, preserves mask shape no matter what the
+                depth transform is. With a depth decrease, this would crop the
+                bottom of the clip.
         """
         super(DepthChange, self).__init__()
         self.min_depth_factor = min_depth_factor
         self.max_depth_factor = max_depth_factor
+        self.preserve_beam_shape = preserve_beam_shape
 
     def forward(
             self,
@@ -73,15 +78,18 @@ class DepthChange(nn.Module):
         # Perform affine transform that scales and translates image
         new_image = tvf.affine(image, 0., [translate_x, translate_y], scale, 0.)
 
-        # Ensure that beam edges correspond with mask edges
-        if probe == Probe.LINEAR.value and scale < 1.:
-            x_diff = ((1 - scale) * w / 2).int()
-            new_image = new_image[:, :, x_diff: w - x_diff]
-            new_image = tvf.resize_image(new_image, [h, w])
+        if self.preserve_beam_shape:
+            # Ensure that beam shape doesn't change
+            if probe == Probe.LINEAR.value and scale < 1.:
+                # Resize horizontally to fit within mask
+                x_diff = ((1 - scale) * w / 2).int()
+                new_image = new_image[:, :, x_diff: w - x_diff]
+                new_image = tvf.resize_image(new_image, [h, w])
+            new_mask = mask
         else:
-            new_image = mask * new_image
-        new_image = new_image.to(torch.uint8)
-        return new_image, label, keypoints, mask, probe
+            new_mask = tvf.affine(mask, 0., [translate_x, translate_y], scale, 0.)
+        new_image = (new_mask * new_image).to(torch.uint8)
+        return new_image, label, keypoints, new_mask, probe
 
 
 class ShiftAndRotate(nn.Module):

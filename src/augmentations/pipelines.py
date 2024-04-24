@@ -108,16 +108,16 @@ def get_original_byol_augmentations(
 
 
 def get_august_augmentations(
-        wavelet_denoise_prob: float = 0.333,
-        brightness_contrast_prob: float = 0.2,
-        gamma_prob: float = 0.2,
-        probe_type_prob: float = 0.2,
-        convexity_prob: float = 0.333,
-        depth_prob: float = 0.25,
-        speckle_prob: float = 0.25,
-        gaussian_prob: float = 0.25,
+        wavelet_denoise_prob: float = 0.5,
+        brightness_contrast_prob: float = 0.5,
+        gamma_prob: float = 0.5,
+        probe_type_prob: float = 0.3,
+        convexity_prob: float = 0.75,
+        depth_prob: float = 0.5,
+        speckle_prob: float = 0.333,
+        gaussian_prob: float = 0.333,
         sp_prob: float = 0.15,
-        shift_rotate_prob: float = 0.333,
+        shift_rotate_prob: float = 0.5,
         reflect_prob: float = 0.5,
         mean_pixel_val: List[float] = None,
         std_pixel_val: List[float] = None
@@ -148,7 +148,7 @@ def get_august_augmentations(
         ),
         v2.RandomApply([GammaCorrection(min_gamma=0.5, max_gamma=2)], p=gamma_prob),
         v2.RandomApply(
-            [BrightnessContrastChange(min_brightness=0.8, max_brightness=1.2, min_contrast=0.8, max_contrast=1.2)],
+            [BrightnessContrastChange(min_brightness=0.6, max_brightness=1.4, min_contrast=0.6, max_contrast=1.4)],
             p=brightness_contrast_prob
         ),  
         # v2.RandomApply(
@@ -164,7 +164,7 @@ def get_august_augmentations(
             p=convexity_prob
         ),
         v2.RandomApply(
-            [DepthChange(min_depth_factor=0.7, max_depth_factor=1.3)],
+            [DepthChange(min_depth_factor=0.8, max_depth_factor=1.4)],
             p=depth_prob
         ),
         v2.RandomApply(
@@ -173,16 +173,16 @@ def get_august_augmentations(
                       p=speckle_prob
         ),
         v2.RandomApply(
-            [GaussianNoise(min_sigma=0.5, max_sigma=5.0)],
+            [GaussianNoise(min_sigma=0.5, max_sigma=2.5)],
             p=gaussian_prob
         ),
-        v2.RandomApply(
-            [SaltAndPepperNoise(min_salt_frac=0.001, max_salt_frac=0.005, min_pepper_frac=0.001,
-                                                    max_pepper_frac=0.005)],
-            p=sp_prob
-        ),
+        # v2.RandomApply(
+        #     [SaltAndPepperNoise(min_salt_frac=0.001, max_salt_frac=0.005, min_pepper_frac=0.001,
+        #                                             max_pepper_frac=0.005)],
+        #     p=sp_prob
+        # ),
         v2.RandomApply([HorizontalReflection()], p=reflect_prob),
-        v2.RandomApply([ShiftAndRotate(max_shift=0.1, max_rotation=15)], p=shift_rotate_prob),
+        v2.RandomApply([ShiftAndRotate(max_shift=0.2, max_rotation=22.5)], p=shift_rotate_prob),
         v2.ToDtype(torch.float32, scale=True),
         get_normalize_transform(mean_pixel_val, std_pixel_val)
     ]
