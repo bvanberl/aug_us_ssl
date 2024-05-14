@@ -133,9 +133,9 @@ if __name__ == '__main__':
 
         # Create feature extractor
         if cfg['train']['extractor_weights'] == 'scratch':
-            extractor = get_extractor(cfg['train']['extractor'], False)
+            extractor = get_extractor(cfg['train']['extractor'], False).cuda()
         elif cfg['train']['extractor_weights'] == 'imagenet':
-            extractor = get_extractor(cfg['train']['extractor'], True)
+            extractor = get_extractor(cfg['train']['extractor'], True).cuda()
         else:
             je_model = JointEmbeddingModel.load_from_checkpoint(cfg['train']['extractor_weights'])
             extractor = je_model.extractor

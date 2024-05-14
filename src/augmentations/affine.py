@@ -4,6 +4,7 @@ import math
 import torch
 from torch import nn, Tensor
 from torchvision.transforms.v2 import functional as tvf
+from torchvision.transforms import InterpolationMode
 
 from src.constants import Probe
 from src.augmentations.aug_utils import *
@@ -76,7 +77,7 @@ class DepthChange(nn.Module):
             translate_y = (scale - 1) * (h / 2 - keypoints[1])
 
         # Perform affine transform that scales and translates image
-        new_image = tvf.affine(image, 0., [translate_x, translate_y], scale, 0.)
+        new_image = tvf.affine(image, 0., [translate_x, translate_y], scale, 0., InterpolationMode.BILINEAR)
 
         if self.preserve_beam_shape:
             # Ensure that beam shape doesn't change
@@ -87,7 +88,7 @@ class DepthChange(nn.Module):
                 new_image = tvf.resize_image(new_image, [h, w])
             new_mask = mask
         else:
-            new_mask = tvf.affine(mask, 0., [translate_x, translate_y], scale, 0.)
+            new_mask = tvf.affine(mask, 0., [translate_x, translate_y], scale, 0., InterpolationMode.BILINEAR)
         new_image = (new_mask * new_image).to(torch.uint8)
         return new_image, label, keypoints, new_mask, probe
 
@@ -149,8 +150,8 @@ class ShiftAndRotate(nn.Module):
         angle = random.uniform(-self.max_rotation, self.max_rotation)
 
         # Perform affine transform that scales and translates image
-        new_image = tvf.affine(image, angle, [translate_x, translate_y], 1., 0.)
-        new_mask = tvf.affine(mask, angle, [translate_x, translate_y], 1., 0.)
+        new_image = tvf.affine(image, angle, [translate_x, translate_y], 1., 0., InterpolationMode.BILINEAR)
+        new_mask = tvf.affine(mask, angle, [translate_x, translate_y], 1., 0., InterpolationMode.BILINEAR)
 
         # Get coordinates of new keypoints
         sin_angle = math.sin(angle)
