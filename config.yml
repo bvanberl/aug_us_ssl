@@ -38,15 +38,15 @@ pretrain:
 
 train:
   seed: 11
-  label: 'pe_label'
+  label: 'ab_lines_label'
   linear: true
   epochs: 10
   batch_size: 512
   lr_head: 0.02
-  lr_extractor: 0
+  lr_extractor: 0.0
   weight_decay: 0.000001
   extractor: 'mobilenetv3'
-  extractor_weights: "imagenet"
+  extractor_weights: 'B:/Downloads/epoch=9-step=6020.ckpt'
   augment_pipeline: "supervised"
 
 augment:
