@@ -23,7 +23,7 @@ class ConvexityMutation(nn.Module):
             self,
             square_roi: bool = False,
             min_top_width: float = 0.,
-            max_top_width: float = 0.5,
+            max_top_width: float = 0.75,
             point_thresh: float = 1.
     ):
         """Initializes the NonLinearToLinear layer.
@@ -119,8 +119,8 @@ class ConvexityMutation(nn.Module):
         if self.square_roi:
             vertical_adjust = (h - 1) / new_yy[-1, x_itn.int()]
             new_yy = new_yy * vertical_adjust
-            new_y3 = y3 / vertical_adjust
-            new_y4 = y4 / vertical_adjust
+            new_y3 = torch.min(y3 / vertical_adjust, torch.tensor(h - 1.))
+            new_y4 = torch.min(y4 / vertical_adjust, torch.tensor(h - 1.))
             horiz_adjust = w / (new_xx[new_y3.int(), w - 1] - new_xx[new_y3.int(), new_x_itn.int()]) / 2.
             new_xx = (new_xx - new_x_itn) * horiz_adjust + new_x_itn
         else:

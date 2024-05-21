@@ -100,7 +100,12 @@ class SpeckleNoise(nn.Module):
                 x3 = x3 * w / h
                 x4 = x4 * w / h
                 x_itn = x_itn * w / h
-                image = tvf.resize(image, [h, w])
+                if w  != 224:
+                    f = 3
+                try:
+                    image = tvf.resize(image, [h, w])
+                except Exception as e:
+                    r = 0
             bot_r = torch.sqrt((x3 - x_itn) ** 2 + (y3 - y_itn) ** 2)
 
             theta = get_angle_of_intersection(x3, y3, x4, y4, x_itn, y_itn)

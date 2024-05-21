@@ -8,7 +8,7 @@ import yaml
 import torchvision
 from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.loggers import WandbLogger, TensorBoardLogger
-from pytorch_lightning.callbacks import LearningRateMonitor
+from pytorch_lightning.callbacks import LearningRateMonitor, TQDMProgressBar
 
 from src.models.classifier import Classifier
 from src.models.joint_embedding import JointEmbeddingModel
@@ -39,7 +39,8 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', required=False, type=int, help='Number of epochs')
     parser.add_argument('--batch_size', required=False, type=int, help='Batch size')
     parser.add_argument('--augment_pipeline', required=False, type=str, default=None, help='Augmentation pipeline')
-    parser.add_argument('--num_workers', required=False, type=int, default=0, help='Number of workers for data loading')
+    parser.add_argument('--num_train_workers', required=False, type=int, default=0, help='Number of workers for loading train set')
+    parser.add_argument('--num_val_workers', required=False, type=int, default=0, help='Number of workers for loading val set')
     parser.add_argument('--seed', required=False, type=int, help='Random seed')
     parser.add_argument('--checkpoint_path', required=False, type=str, help='Checkpoint to resume from')
     parser.add_argument('--labelled_only', required=False, type=int, help='Whether to use only examples with labels')
@@ -50,8 +51,9 @@ if __name__ == '__main__':
     num_gpus = args['gpus_per_node']
     world_size = num_nodes * num_gpus
     seed = args['seed'] if args['seed'] else cfg['train']['seed']
-    n_workers = args["num_workers"]
-    seed_everything(seed, n_workers > 0)
+    n_train_workers = args["num_train_workers"]
+    n_val_workers = args["num_val_workers"]
+    seed_everything(seed, n_train_workers > 0)
 
     # Update config with values from command-line args
     for k in cfg['data']:
@@ -87,7 +89,8 @@ if __name__ == '__main__':
         splits_dir,
         batch_size,
         augment_pipeline=augment_pipeline,
-        n_workers=n_workers
+        n_train_workers=n_train_workers,
+        n_val_workers=n_val_workers
     )
 
     # Finalize run configuration
@@ -171,7 +174,10 @@ if __name__ == '__main__':
         loggers.append(WandbLogger(log_model="all"))
 
     # Create callbacks
-    callbacks = [LearningRateMonitor(logging_interval='step')]
+    callbacks = [
+        LearningRateMonitor(logging_interval='step'),
+        TQDMProgressBar(refresh_rate=100)
+    ]
 
     # Train the model
     trainer = Trainer(

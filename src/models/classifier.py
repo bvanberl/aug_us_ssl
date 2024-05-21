@@ -134,5 +134,5 @@ class Classifier(pl.LightningModule):
         return [optimizer], [{"scheduler": scheduler, "interval": "epoch"}]
 
     def summary(self):
-        torchsummary.summary(self.extractor, input_size=self.input_shape)
-        torchsummary.summary(self.head, input_size=(self.h_dim,))
+        torchsummary.summary(self.extractor.cuda(), input_size=self.input_shape)
+        torchsummary.summary(self.head.cuda(), input_size=(self.h_dim,))

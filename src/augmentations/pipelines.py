@@ -108,6 +108,8 @@ def get_original_byol_augmentations(
 
 
 def get_august_augmentations(
+        height: int,
+        width: int,
         wavelet_denoise_prob: float = 0.5,
         brightness_contrast_prob: float = 0.5,
         gamma_prob: float = 0.5,
@@ -143,17 +145,15 @@ def get_august_augmentations(
     """
     gauss_kernel = 13
     transforms = [
+        ResizeKeypoint(size=[height, width]),
         # v2.RandomApply(
         #     [WaveletDenoise(j_0=2, j=3, min_alpha=2.5, max_alpha=3.5)],
         #     p=wavelet_denoise_prob
         # ),
-        v2.RandomApply([v2.GaussianBlur(gauss_kernel)], p=0.5),
         # v2.RandomApply(
         #     [CLAHETransform(min_clip_limit=5, max_clip_limit=10, tile_grid_size=(6, 6))],
         #     p=clahe_prob
         # ),
-        v2.RandomResizedCrop((128, 128), scale=(0.4, 1.), antialias=True,
-                             interpolation=InterpolationMode.BICUBIC),
         v2.RandomApply(
             [ProbeTypeChange(square_roi=True, min_linear_width_frac=0.5, max_linear_width_frac=1.0)],
             p=probe_type_prob
@@ -162,7 +162,8 @@ def get_august_augmentations(
             [ConvexityMutation(square_roi=True, min_top_width=0., max_top_width=0.5)],
             p=convexity_prob
         ),
-        v2.RandomApply([GammaCorrection(min_gamma=0.5, max_gamma=2)], p=gamma_prob),
+        v2.RandomApply([v2.GaussianBlur(gauss_kernel)], p=0.5),
+        #v2.RandomApply([GammaCorrection(min_gamma=0.5, max_gamma=2)], p=gamma_prob),
         v2.RandomApply(
             [BrightnessContrastChange(min_brightness=0.6, max_brightness=1.4, min_contrast=0.6, max_contrast=1.4)],
             p=brightness_contrast_prob
@@ -173,20 +174,24 @@ def get_august_augmentations(
         # ),
         v2.RandomApply(
             [SpeckleNoise(square_roi=True, min_lateral_res=35, max_lateral_res=45,
-                                   min_axial_res=75, max_axial_res=85, min_phasors=5, max_phasors=15)],
+                                   min_axial_res=75, max_axial_res=85, min_phasors=5, max_phasors=10)],
                       p=speckle_prob
         ),
         v2.RandomApply(
             [GaussianNoise(min_sigma=0.5, max_sigma=2.5)],
             p=gaussian_prob
         ),
-        # v2.RandomApply(
-        #     [SaltAndPepperNoise(min_salt_frac=0.001, max_salt_frac=0.005, min_pepper_frac=0.001,
-        #                                             max_pepper_frac=0.005)],
-        #     p=sp_prob
-        # ),
+        v2.RandomApply(
+            [SaltAndPepperNoise(min_salt_frac=0.001, max_salt_frac=0.005, min_pepper_frac=0.001,
+                                                    max_pepper_frac=0.005)],
+            p=sp_prob
+        ),
+        v2.RandomApply(
+            [RandomResizedCropKeypoint((height, width), scale=(0.7, 1.), antialias=True,
+                                       interpolation=InterpolationMode.BICUBIC)],
+            p=1.0),
         v2.RandomApply([HorizontalReflection()], p=reflect_prob),
-        v2.RandomApply([ShiftAndRotate(max_shift=0.2, max_rotation=10)], p=shift_rotate_prob),
+        v2.RandomApply([ShiftAndRotate(max_shift=0.2, max_rotation=22.5)], p=shift_rotate_prob),
         v2.ToDtype(torch.float32, scale=True),
         get_normalize_transform(mean_pixel_val, std_pixel_val)
     ]

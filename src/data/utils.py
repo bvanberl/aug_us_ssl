@@ -7,7 +7,7 @@ from PIL import Image, ImageDraw
 from src.constants import Probe
 
 
-def get_beam_mask(h, w, keypoints, probe, square_roi: bool = False):
+def get_beam_mask(h, w, keypoints, probe, square_roi: bool = False, mode: str = 'L'):
     """Produce an ultrasound beam mask
 
     Given a set of keypoints indicating beam corners,
@@ -21,6 +21,7 @@ def get_beam_mask(h, w, keypoints, probe, square_roi: bool = False):
         square_roi: If True, images are minimal crops surrounding the beam
                 that have been resized to square. The peripherals of the beam
                 are flush with the edges of the image.
+        mode: PIL image mode
 
     Returns: Mask image with shape (h, w, 1), where pixels with value 1 and
         0 indicating locations that are and are not in the beam, respectively.
@@ -37,7 +38,7 @@ def get_beam_mask(h, w, keypoints, probe, square_roi: bool = False):
     else:
         raise Exception("Probe type {} does not exist".format(probe))
 
-    mask = Image.new('L', (w, h), 0)
+    mask = Image.new(mode, (w, h), 0)
     draw = ImageDraw.Draw(mask)
     draw.polygon(polygon, fill=1)
     return mask
@@ -170,7 +171,7 @@ def get_curved_linear_beam_shape(
     approximated by edges on a polygon.
     Args:
         keypoints: Beam keypoints, in format [x1, y1, x2, y2, x3, y3, x4, y4]
-        y_bottom: y-coordinate of bottom of beamhey
+        y_bottom: y-coordinate of bottom of beam
 
     Returns:
         List of point coordinates defining the shape of the mask
@@ -181,6 +182,8 @@ def get_curved_linear_beam_shape(
 
     # Sample points on bottom arc
     arc_bot = get_points_on_arc(x3, y3, x4, x_itn, y_itn, y_bottom=y_bottom)
+    if y_bottom is None:
+        y_bottom = max([p[1] for p in arc_bot])
 
     # Sample points on the top arc
     top_minimum = (y_bottom - y_itn) / (y3 - y_itn) * (y1 - y_itn) + y_itn

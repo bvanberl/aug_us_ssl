@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader
 from torch.nn.functional import one_hot
-from torchvision.transforms.v2 import Compose
+from torchvision.transforms.v2 import Compose, functional as tvf
 from torchvision.io import read_image, ImageReadMode
 
 from src.constants import Probe
@@ -21,6 +21,8 @@ class ImagePretrainDataset(Dataset):
             transforms1: Optional[Callable],
             transforms2: Optional[Callable],
             img_ext: str = ".jpg",
+            height: int = 224,
+            width: int = 224,
             channels: int = 3
     ):
         self.img_root_dir = img_root_dir
@@ -29,7 +31,7 @@ class ImagePretrainDataset(Dataset):
         self.image_paths = [p.replace("\\", "/") for p in img_records["filepath"].tolist()]
         self.mask_paths = [f"{id}_mask{img_ext}" for id in img_records["id"].tolist()]
         self.keypoints = torch.from_numpy(img_records[["x1", "y1", "x2", "y2", "x3", "y3", "x4", "y4"]].values.astype(np.float32))
-        self.probe_types = torch.tensor([Probe[p.replace(' ', '_')].value for p in img_records["probe_type"].tolist()])
+        self.probe_types = torch.tensor([Probe[p.replace(' ', '_').upper()].value for p in img_records["probe_type"].tolist()])
 
         self.transforms1 = transforms1
         self.transforms2 = transforms2
@@ -41,6 +43,8 @@ class ImagePretrainDataset(Dataset):
         else:
             self.read_mode = ImageReadMode.UNCHANGED
 
+        self.height = height
+        self.width = width
         self.cardinality = len(self.image_paths)
 
     def __len__(self):
@@ -61,13 +65,10 @@ class ImagePretrainDataset(Dataset):
         probe_type = self.probe_types[idx]
 
         # Apply data augmentation transforms
-        try:
-            if self.transforms1:
-                x1 = self.transforms1(x1, label, keypoints, mask, probe_type)[0]
-            if self.transforms2:
-                x2 = self.transforms2(x2, label, keypoints, mask, probe_type)[0]
-        except Exception:
-            print(image_path)
+        if self.transforms1:
+            x1 = self.transforms1(x1, label, keypoints, mask, probe_type)[0]
+        if self.transforms2:
+            x2 = self.transforms2(x2, label, keypoints, mask, probe_type)[0]
         return x1, x2
 
 
@@ -135,7 +136,7 @@ def get_augmentation_transforms_pretrain(
     if pipeline == "byol_grayscale":
         return get_grayscale_byol_augmentations(height, width)
     elif pipeline == "august":
-        return get_august_augmentations(**augment_kwargs)
+        return get_august_augmentations(height, width, **augment_kwargs)
     elif pipeline == "supervised":
         return get_supervised_augmentations(height, width, **augment_kwargs)
     else:
@@ -277,7 +278,8 @@ def load_data_for_pretrain(
         batch_size: int,
         augment_pipeline: str = "august",
         use_unlabelled: bool = True,
-        n_workers: int = 0,
+        n_train_workers: int = 0,
+        n_val_workers: int = 0,
         **preprocess_kwargs
 ) -> (DataLoader, pd.DataFrame):
     """
@@ -304,7 +306,7 @@ def load_data_for_pretrain(
     """
 
     # Load data for pretraining
-    labelled_train_frames_path = os.path.join(splits_dir, f'train_set_frames.csv')
+    labelled_train_frames_path = os.path.join(splits_dir, 'train_set_frames.csv')
     labelled_train_clips_path = os.path.join(splits_dir, 'train_set_clips.csv')
     if os.path.exists(labelled_train_frames_path) and os.path.exists(labelled_train_clips_path):
         labelled_train_frames_df = pd.read_csv(labelled_train_frames_path)
@@ -312,7 +314,7 @@ def load_data_for_pretrain(
     else:
         labelled_train_frames_df = pd.DataFrame()
         labelled_train_clips_df = pd.DataFrame()
-    unlabelled_frames_path = os.path.join(splits_dir, f'unlabelled_frames.csv')
+    unlabelled_frames_path = os.path.join(splits_dir, 'unlabelled_frames.csv')
     unlabelled_clips_path = os.path.join(splits_dir, 'unlabelled_clips.csv')
     if os.path.exists(unlabelled_frames_path) and os.path.exists(unlabelled_clips_path):
         unlabelled_frames_df = pd.read_csv(unlabelled_frames_path)
@@ -320,7 +322,7 @@ def load_data_for_pretrain(
     else:
         unlabelled_frames_df = pd.DataFrame()
         unlabelled_clips_df = pd.DataFrame()
-    val_frames_path = os.path.join(splits_dir, f'val_set_frames.csv')
+    val_frames_path = os.path.join(splits_dir, 'val_set_frames.csv')
     val_clips_path = os.path.join(splits_dir, 'val_set_clips.csv')
     if os.path.exists(val_frames_path) and os.path.exists(val_clips_path):
         val_frames_df = pd.read_csv(val_frames_path)
@@ -360,7 +362,7 @@ def load_data_for_pretrain(
         augment_pipeline=augment_pipeline,
         shuffle=True,
         channels=3,
-        n_workers=n_workers,
+        n_workers=n_train_workers,
         drop_last=True,
         **preprocess_kwargs
     )
@@ -375,7 +377,7 @@ def load_data_for_pretrain(
             augment_pipeline="none",
             shuffle=False,
             channels=3,
-            n_workers=0,
+            n_workers=n_val_workers,
             drop_last=False,
             **preprocess_kwargs
         )
@@ -393,7 +395,8 @@ def load_data_for_train(
         splits_dir: str,
         batch_size: int,
         augment_pipeline: str = "august",
-        n_workers: int = 0,
+        n_train_workers: int = 0,
+        n_val_workers: int = 0,
         **preprocess_kwargs
 ) -> (DataLoader, pd.DataFrame):
     """
@@ -451,7 +454,7 @@ def load_data_for_train(
         augment_pipeline=augment_pipeline,
         shuffle=True,
         channels=3,
-        n_workers=n_workers,
+        n_workers=n_train_workers,
         drop_last=True,
         **preprocess_kwargs
     )
@@ -466,7 +469,7 @@ def load_data_for_train(
             augment_pipeline="none",
             shuffle=True,
             channels=3,
-            n_workers=0,
+            n_workers=n_val_workers,
             drop_last=False,
             **preprocess_kwargs
         )
