@@ -82,6 +82,7 @@ if __name__ == '__main__':
     channels = 3
     img_dim = (channels, height, width)
     batch_size = cfg['pretrain']['batch_size']
+    resize = bool(cfg['data']['resize'])
 
     # Determine data augmentation pipeline
     if args["augment_pipeline"] is not None:
@@ -110,6 +111,7 @@ if __name__ == '__main__':
         use_unlabelled=not bool(cfg['pretrain']['labelled_only']),
         n_train_workers=n_train_workers,
         n_val_workers=n_val_workers,
+        resize=resize,
         **hparams
     )
 
@@ -207,7 +209,8 @@ if __name__ == '__main__':
         logger=loggers,
         default_root_dir=checkpoint_dir,
         callbacks=callbacks,
-        log_every_n_steps=args['log_interval']
+        log_every_n_steps=args['log_interval'],
+        profiler='advanced'
     )
     #trainer.fit(model, train_loader, val_loader, ckpt_path=load_ckpt_path)
     trainer.fit(model, train_loader, ckpt_path=load_ckpt_path)

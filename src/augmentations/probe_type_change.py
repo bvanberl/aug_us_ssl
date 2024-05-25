@@ -76,6 +76,8 @@ class ProbeTypeChange(nn.Module):
 
         x1, y1, x2, y2, x3, y3, x4, y4 = keypoints
         c, h, w = image.shape
+        device = image.get_device()
+        device = 'cpu' if device == -1 else device
 
         if probe == Probe.LINEAR.value:
 
@@ -95,8 +97,8 @@ class ProbeTypeChange(nn.Module):
             new_keypoints = torch.stack([new_x1, y1, new_x2, y2, x3, new_y3, x4, new_y4])
 
             # Obtain flow field mapping points in new curved linear image to old linear image
-            y_coords = torch.linspace(0., h - 1., h)
-            x_coords = torch.linspace(0., w - 1, w)
+            y_coords = torch.linspace(0., h - 1., h, device=device)
+            x_coords = torch.linspace(0., w - 1, w, device=device)
             new_yy, new_xx = torch.meshgrid(y_coords, x_coords, indexing='ij')
             out_xx = torch.atan2(new_xx - x_itn, new_yy - y_itn)
             x_squeeze_factor = 1. / torch.abs(out_xx[new_y3.int(), 0])
@@ -109,6 +111,7 @@ class ProbeTypeChange(nn.Module):
             new_image = nn.functional.grid_sample(image.unsqueeze(0).float(), flow_field.unsqueeze(0), align_corners=False).squeeze(0)
             new_mask = nn.functional.grid_sample(mask.unsqueeze(0).float(), flow_field.unsqueeze(0), align_corners=False).squeeze(0)
             new_image = new_image.to(torch.uint8)
+
             return new_image, label, new_keypoints, new_mask, Probe.CURVED_LINEAR.value
 
         else:
@@ -126,9 +129,9 @@ class ProbeTypeChange(nn.Module):
                 # are on-screen and comprise the left and right bounds.
                 if x3 < 0. or x4 > w:
                     image = torch.concat([
-                        torch.zeros((c, h, max(torch.abs(x3).int(), 0))),
+                        torch.zeros((c, h, max(torch.abs(x3).int(), 0)), device=device),
                         image,
-                        torch.zeros((c, h, max(torch.abs(x4.int() - w), 0))),
+                        torch.zeros((c, h, max(torch.abs(x4.int() - w), 0)), device=device),
                     ], 2)
                     image = tvf.resize(image, [h, w])
                     w_delta = w / (x4 - x3)
@@ -172,8 +175,8 @@ class ProbeTypeChange(nn.Module):
             theta = get_angle_of_intersection(x3, y3, x4, y4, x_itn, y_itn)
 
             # Calculate radius of the beam's circular sector
-            y_coords = torch.linspace(0, h - 1, h)
-            x_coords = torch.linspace(0, w - 1, w)
+            y_coords = torch.linspace(0, h - 1, h, device=device)
+            x_coords = torch.linspace(0, w - 1, w, device=device)
             yy, xx = torch.meshgrid(y_coords, x_coords, indexing='ij')
 
             phi = theta * ((x_coords - x3) / beam_w - 0.5)  # Angles by x coordinates

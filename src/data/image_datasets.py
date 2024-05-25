@@ -1,12 +1,12 @@
 import os
-from typing import Optional, Callable, List
+from typing import Optional, Callable
+import sys
+import traceback
 
 import pandas as pd
 import numpy as np
-import torch
 from torch.utils.data import Dataset, DataLoader
-from torch.nn.functional import one_hot
-from torchvision.transforms.v2 import Compose, functional as tvf
+from torchvision.transforms.v2 import Compose
 from torchvision.io import read_image, ImageReadMode
 
 from src.constants import Probe
@@ -23,15 +23,17 @@ class ImagePretrainDataset(Dataset):
             img_ext: str = ".jpg",
             height: int = 224,
             width: int = 224,
-            channels: int = 3
+            channels: int = 3,
+            device: str = 'cpu'
     ):
+        self.device = device
         self.img_root_dir = img_root_dir
         self.mask_root_dir = mask_root_dir
 
         self.image_paths = [p.replace("\\", "/") for p in img_records["filepath"].tolist()]
         self.mask_paths = [f"{id}_mask{img_ext}" for id in img_records["id"].tolist()]
-        self.keypoints = torch.from_numpy(img_records[["x1", "y1", "x2", "y2", "x3", "y3", "x4", "y4"]].values.astype(np.float32))
-        self.probe_types = torch.tensor([Probe[p.replace(' ', '_').upper()].value for p in img_records["probe_type"].tolist()])
+        self.keypoints = img_records[["x1", "y1", "x2", "y2", "x3", "y3", "x4", "y4"]].values.astype(np.float32)
+        self.probe_types = np.array([Probe[p.replace(' ', '_').upper()].value for p in img_records["probe_type"].tolist()])
 
         self.transforms1 = transforms1
         self.transforms2 = transforms2
@@ -54,21 +56,24 @@ class ImagePretrainDataset(Dataset):
 
         # Load and copy image
         image_path = os.path.join(self.img_root_dir, self.image_paths[idx])
-        x1 = read_image(image_path, self.read_mode)
+        x1 = read_image(image_path, self.read_mode).to(self.device)
         x2 = torch.clone(x1)
 
         # Load ancillary inputs
         mask_path = os.path.join(self.mask_root_dir, self.mask_paths[idx])
-        mask = read_image(mask_path)
+        mask = read_image(mask_path).to(self.device)
         label = torch.tensor(-1)    # No label
-        keypoints = self.keypoints[idx]
-        probe_type = self.probe_types[idx]
+        keypoints = torch.tensor(self.keypoints[idx], device=self.device)
+        probe_type = torch.tensor(self.probe_types[idx], device=self.device)
 
         # Apply data augmentation transforms
-        if self.transforms1:
-            x1 = self.transforms1(x1, label, keypoints, mask, probe_type)[0]
-        if self.transforms2:
-            x2 = self.transforms2(x2, label, keypoints, mask, probe_type)[0]
+        try:
+            if self.transforms1:
+                x1 = self.transforms1(x1, label, keypoints, mask, probe_type)[0]
+            if self.transforms2:
+                x2 = self.transforms2(x2, label, keypoints, mask, probe_type)[0]
+        except Exception as e:
+            print(e, traceback.format_exc(), image_path, keypoints)
         return x1, x2
 
 
@@ -80,19 +85,18 @@ class ImageClassificationDataset(Dataset):
             labels: np.ndarray,
             n_classes: int,
             transforms: Optional[Callable],
-            img_ext: str = ".jpg"
+            img_ext: str = ".jpg",
+            device: str = "cpu"
     ):
         assert len(img_paths) == len(labels), "Number of images and labels must match."
         self.image_paths = [p.replace("\\", "/") for p in img_paths]
         self.img_ext = img_ext
         self.img_root_dir = img_root_dir
         self.n_classes = n_classes
-        if n_classes > 2:
-            self.labels = one_hot(torch.from_numpy(labels), num_classes=n_classes)
-        else:
-            self.labels = torch.from_numpy(np.expand_dims(labels, axis=-1).astype(np.float32))
+        self.labels = torch.from_numpy(labels)
         self.label_freqs = np.unique(labels, return_counts=True)[1] / len(labels)
         self.transforms = transforms
+        self.device = device
         self.cardinality = len(self.image_paths)
 
     def __len__(self):
@@ -105,7 +109,7 @@ class ImageClassificationDataset(Dataset):
             self.img_root_dir,
             self.image_paths[idx]
         )
-        x = read_image(image_path)
+        x = read_image(image_path).to(self.device)
 
         # Apply data augmentation transforms
         if self.transforms:
@@ -115,10 +119,11 @@ class ImageClassificationDataset(Dataset):
         return x, y
 
 
-def get_augmentation_transforms_pretrain(
+def get_augmentation_transforms(
         pipeline: str,
         height: int,
         width: int,
+        resize: bool = True,
         **augment_kwargs
 ) -> Compose:
     """Get augmentation transformation pipelines
@@ -132,18 +137,18 @@ def get_augmentation_transforms_pretrain(
     """
     pipeline = pipeline.lower()
     if pipeline == "byol_original":
-        return get_original_byol_augmentations(height, width)
+        return get_original_byol_augmentations(height, width, resize=resize)
     if pipeline == "byol_grayscale":
-        return get_grayscale_byol_augmentations(height, width)
+        return get_grayscale_byol_augmentations(height, width, resize=resize)
     elif pipeline == "august":
-        return get_august_augmentations(height, width, **augment_kwargs)
+        return get_august_augmentations(height, width, resize=resize, **augment_kwargs)
     elif pipeline == "supervised":
-        return get_supervised_augmentations(height, width, **augment_kwargs)
+        return get_supervised_augmentations(height, width, resize=resize, **augment_kwargs)
     else:
         if pipeline != "none":
             print(f"Unrecognized augmentation pipeline: {pipeline}.\n"
                             f"No augmentations will be applied.")
-        return get_validation_scaling()
+        return get_validation_scaling(height, width, resize=resize)
 
 
 def prepare_pretrain_dataloader(
@@ -157,6 +162,8 @@ def prepare_pretrain_dataloader(
         shuffle: bool = False,
         n_workers: int = 0,
         drop_last: bool = False,
+        resize: bool = True,
+        device: str = 'cuda',
         **preprocess_kwargs
 ) -> DataLoader:
     '''
@@ -173,21 +180,24 @@ def prepare_pretrain_dataloader(
     :param n_workers: Number of workers for preloading batches
     :param world_size: Number of processes. If 1, then not using distributed mode
     :param drop_last: If True, drops the last batch in the data loader if smaller than the batch size
+    :param device: Device on which to execute data transformations
     :param preprocess_kwargs: Keyword arguments for preprocessing
     :return: A batched dataset ready for iterating over preprocessed batches
     '''
 
     # Construct the dataset
-    augment1 = get_augmentation_transforms_pretrain(
+    augment1 = get_augmentation_transforms(
         augment_pipeline,
         height,
         width,
+        resize=resize
         #**preprocess_kwargs["augmentation"]
     )
-    augment2 = get_augmentation_transforms_pretrain(
+    augment2 = get_augmentation_transforms(
         augment_pipeline,
         height,
         width,
+        resize=resize
         # **preprocess_kwargs["augmentation"]
     )
 
@@ -196,16 +206,19 @@ def prepare_pretrain_dataloader(
         img_root,
         mask_root,
         transforms1=augment1,
-        transforms2=augment2
+        transforms2=augment2,
+        device=device,
     )
 
+    persistent_workers = n_workers > 0
     data_loader = DataLoader(
         dataset,
         batch_size=batch_size,
         shuffle=shuffle,
         num_workers=n_workers,
         drop_last=drop_last,
-        pin_memory=True
+        pin_memory=True,
+        persistent_workers=persistent_workers
     )
     return data_loader
 
@@ -221,6 +234,7 @@ def prepare_train_dataloader(
         shuffle: bool = False,
         n_workers: int = 0,
         drop_last: bool = False,
+        resize: bool = True,
         **preprocess_kwargs
 ) -> DataLoader:
     '''
@@ -243,17 +257,21 @@ def prepare_train_dataloader(
     '''
 
     # Construct the dataset
-    augmentations = get_augmentation_transforms_pretrain(
+
+
+
+    augmentations = get_augmentation_transforms(
         augment_pipeline,
         height,
-        width
+        width,
+        resize=resize
     )
 
     n_classes = file_df[label_name].nunique()
     dataset = ImageClassificationDataset(
         img_root,
         file_df['filepath'].tolist(),
-        file_df[label_name].tolist(),
+        file_df[label_name].to_numpy(),
         n_classes,
         transforms=augmentations
     )
@@ -264,7 +282,7 @@ def prepare_train_dataloader(
         shuffle=shuffle,
         num_workers=n_workers,
         drop_last=drop_last,
-        pin_memory=True
+        pin_memory=False
     )
     return data_loader
 
@@ -280,6 +298,7 @@ def load_data_for_pretrain(
         use_unlabelled: bool = True,
         n_train_workers: int = 0,
         n_val_workers: int = 0,
+        resize: bool = True,
         **preprocess_kwargs
 ) -> (DataLoader, pd.DataFrame):
     """
@@ -364,6 +383,7 @@ def load_data_for_pretrain(
         channels=3,
         n_workers=n_train_workers,
         drop_last=True,
+        resize=resize,
         **preprocess_kwargs
     )
     if val_frames_df.shape[0] > 0:
@@ -379,6 +399,7 @@ def load_data_for_pretrain(
             channels=3,
             n_workers=n_val_workers,
             drop_last=False,
+            resize=resize,
             **preprocess_kwargs
         )
     else:
@@ -397,6 +418,7 @@ def load_data_for_train(
         augment_pipeline: str = "august",
         n_train_workers: int = 0,
         n_val_workers: int = 0,
+        resize: bool = True,
         **preprocess_kwargs
 ) -> (DataLoader, pd.DataFrame):
     """
@@ -456,6 +478,7 @@ def load_data_for_train(
         channels=3,
         n_workers=n_train_workers,
         drop_last=True,
+        resize=resize,
         **preprocess_kwargs
     )
     if val_frames_df.shape[0] > 0:
@@ -467,10 +490,11 @@ def load_data_for_train(
             width,
             height,
             augment_pipeline="none",
-            shuffle=True,
+            shuffle=False,
             channels=3,
             n_workers=n_val_workers,
             drop_last=False,
+            resize=resize,
             **preprocess_kwargs
         )
     else:

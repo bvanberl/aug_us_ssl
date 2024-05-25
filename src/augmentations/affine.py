@@ -141,6 +141,8 @@ class ShiftAndRotate(nn.Module):
         """
 
         _, h, w = image.shape
+        device = keypoints.get_device()
+        device = 'cpu' if device == -1 else device
 
         # Determine the translation for the image
         translate_x = w * random.uniform(-self.max_shift, self.max_shift)
@@ -156,12 +158,15 @@ class ShiftAndRotate(nn.Module):
         # Get coordinates of new keypoints
         sin_angle = math.sin(angle)
         cos_angle = math.cos(angle)
-        transform_matrix = torch.Tensor([
+        transform_matrix = torch.tensor([
             [cos_angle, -sin_angle, translate_x],
             [sin_angle, cos_angle, translate_y],
             [0., 0., 1.]
-        ])
-        homogenous_kp = torch.concat([keypoints.reshape(4, 2), torch.ones(4, 1)], dim=-1)
+        ], device=device)
+        homogenous_kp = torch.concat([
+            keypoints.reshape(4, 2),
+            torch.ones((4, 1), device=device)
+        ], dim=-1)
         new_homogenous_kp = torch.matmul(transform_matrix, homogenous_kp.T)
         new_keypoints = new_homogenous_kp[:, :2].flatten()
 
@@ -208,6 +213,9 @@ class HorizontalReflection(nn.Module):
             augmented image, label, keypoints, mask, probe type
         """
 
+        device = keypoints.get_device()
+        device = 'cpu' if device == -1 else device
+
         # Perform transform that reflects image horizontally
         new_image = tvf.horizontal_flip(image)
         new_mask = tvf.horizontal_flip(mask)
@@ -222,6 +230,6 @@ class HorizontalReflection(nn.Module):
             keypoints[5],
             keypoints[4],
             keypoints[7]
-        ])
+        ], device=device)
 
         return new_image, label, new_keypoints, new_mask, probe

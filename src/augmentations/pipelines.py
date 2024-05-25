@@ -30,6 +30,9 @@ def get_normalize_transform(
 
 
 def get_validation_scaling(
+        height: int,
+        width: int,
+        resize: bool = True,
         mean_pixel_val: List[float] = None,
         std_pixel_val: List[float] = None
 ) -> v2.Compose:
@@ -43,12 +46,15 @@ def get_validation_scaling(
         v2.ToDtype(torch.float32, scale=True),
         get_normalize_transform(mean_pixel_val, std_pixel_val)
     ]
+    if resize:
+        transforms.insert(0, v2.Resize((height, width)))
     return v2.Compose(transforms)
 
 
 def get_grayscale_byol_augmentations(
         height: int,
         width: int,
+        resize: bool = True,
         mean_pixel_val: List[float] = None,
         std_pixel_val: List[float] = None,
 ) -> v2.Compose:
@@ -73,12 +79,15 @@ def get_grayscale_byol_augmentations(
         v2.ToDtype(torch.float32, scale=True),
         get_normalize_transform(mean_pixel_val, std_pixel_val)
     ]
+    if resize:
+        transforms.insert(0, v2.Resize((height, width)))
     return v2.Compose(transforms)
 
 
 def get_original_byol_augmentations(
         height: int,
         width: int,
+        resize: bool = True,
         mean_pixel_val: List[float] = None,
         std_pixel_val: List[float] = None,
 ) -> v2.Compose:
@@ -104,6 +113,8 @@ def get_original_byol_augmentations(
         v2.ToDtype(torch.float32, scale=True),
         get_normalize_transform(mean_pixel_val, std_pixel_val)
     ]
+    if resize:
+        transforms.insert(0, v2.Resize((height, width)))
     return v2.Compose(transforms)
 
 
@@ -121,6 +132,7 @@ def get_august_augmentations(
         sp_prob: float = 0.15,
         shift_rotate_prob: float = 0.5,
         reflect_prob: float = 0.5,
+        resize: bool = True,
         mean_pixel_val: List[float] = None,
         std_pixel_val: List[float] = None
 ):
@@ -145,7 +157,6 @@ def get_august_augmentations(
     """
     gauss_kernel = 13
     transforms = [
-        ResizeKeypoint(size=[height, width]),
         # v2.RandomApply(
         #     [WaveletDenoise(j_0=2, j=3, min_alpha=2.5, max_alpha=3.5)],
         #     p=wavelet_denoise_prob
@@ -195,6 +206,8 @@ def get_august_augmentations(
         v2.ToDtype(torch.float32, scale=True),
         get_normalize_transform(mean_pixel_val, std_pixel_val)
     ]
+    if resize:
+        transforms.insert(0, ResizeKeypoint(size=[height, width]))
     return v2.Compose(transforms)
 
 
@@ -204,6 +217,7 @@ def get_supervised_augmentations(
         crop_prob: float = 0.5,
         reflect_prob: float = 0.5,
         brightness_contrast_prob: float = 0.5,
+        resize: bool = True,
         mean_pixel_val: List[float] = None,
         std_pixel_val: List[float] = None
 ):
@@ -225,4 +239,6 @@ def get_supervised_augmentations(
         v2.ToDtype(torch.float32, scale=True),
         get_normalize_transform(mean_pixel_val, std_pixel_val)
     ]
+    if resize:
+        transforms.insert(0, v2.Resize((height, width)))
     return v2.Compose(transforms)

@@ -44,6 +44,7 @@ if __name__ == '__main__':
     parser.add_argument('--seed', required=False, type=int, help='Random seed')
     parser.add_argument('--checkpoint_path', required=False, type=str, help='Checkpoint to resume from')
     parser.add_argument('--labelled_only', required=False, type=int, help='Whether to use only examples with labels')
+    parser.add_argument('--label', required=False, type=str, help='Name of label column')
     args = vars(parser.parse_args())
     print(f"Args: {args}")
 
@@ -154,7 +155,7 @@ if __name__ == '__main__':
             cfg['train']['weight_decay'],
             bool(cfg['train']['linear'])
         )
-        #model.summary()
+        model.summary()
 
         # Set checkpoint/log dir and save the run config as a JSON file
         date = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")

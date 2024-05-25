@@ -75,6 +75,8 @@ class SpeckleNoise(nn.Module):
 
         x1, y1, x2, y2, x3, y3, x4, y4 = keypoints
         c, h, w = image.shape
+        device = keypoints.get_device()
+        device = 'cpu' if device == -1 else device
 
         # Determine number of x-, y-values for sample points
         lateral_res = (self.min_lateral_res + torch.rand(()) * (self.max_lateral_res - self.min_lateral_res)).int()
@@ -95,22 +97,18 @@ class SpeckleNoise(nn.Module):
             if self.square_roi:
                 # If keypoints are off-screen, shift and scale image so that they
                 # are on-screen and comprise the left and right bounds.
-                resize_w = torch.floor(2 * torch.sqrt((h - y_itn) ** 2 - (y3 - y_itn) ** 2))
+                resize_w = torch.floor(2 * torch.sqrt(torch.abs((h - y_itn) ** 2 - (y3 - y_itn) ** 2)))
                 w = resize_w.int()
                 x3 = x3 * w / h
                 x4 = x4 * w / h
                 x_itn = x_itn * w / h
-                if w  != 224:
-                    f = 3
-                try:
-                    image = tvf.resize(image, [h, w])
-                except Exception as e:
-                    r = 0
+
+                image = tvf.resize(image, [h, w])
             bot_r = torch.sqrt((x3 - x_itn) ** 2 + (y3 - y_itn) ** 2)
 
             theta = get_angle_of_intersection(x3, y3, x4, y4, x_itn, y_itn)
-            phis = torch.linspace(-theta / 2, theta / 2, lateral_res)
-            rads = torch.linspace(y1, bot_r, axial_res)
+            phis = torch.linspace(-theta / 2, theta / 2, lateral_res, device=device)
+            rads = torch.linspace(y1, bot_r, axial_res, device=device)
             rr, pp = torch.meshgrid(rads, phis, indexing='ij')
             xx = x_itn + rr * torch.sin(pp)
             yy = y_itn + rr * torch.cos(pp)
@@ -132,12 +130,12 @@ class SpeckleNoise(nn.Module):
 
         # Interpolate new image based on noisy intensity at sample points (Step 3)
         if probe == Probe.LINEAR.value:
-            y_coords = torch.linspace(-1., 1., h)
-            x_coords = torch.linspace(-1., 1., w)
+            y_coords = torch.linspace(-1., 1., h, device=device)
+            x_coords = torch.linspace(-1., 1., w, device=device)
             out_yy, out_xx = torch.meshgrid(y_coords, x_coords, indexing='ij')
         else:
-            y_coords = torch.linspace(0., h - 1., h)
-            x_coords = torch.linspace(0., w - 1., w)
+            y_coords = torch.linspace(0., h - 1., h, device=device)
+            x_coords = torch.linspace(0., w - 1., w, device=device)
             new_yy, new_xx = torch.meshgrid(y_coords, x_coords, indexing='ij')
             out_xx = torch.atan2(new_xx - x_itn, new_yy - y_itn) / theta * 2.
             out_yy = torch.sqrt((x_itn - new_xx) ** 2 + (y_itn - new_yy) ** 2) / bot_r * 2. - 1.
@@ -196,10 +194,12 @@ class GaussianNoise(nn.Module):
         Returns:
             augmented image, label, keypoints, mask, probe type
         """
+        device = image.get_device()
+        device = 'cpu' if device == -1 else device
 
         # Sample Gaussian noise to be added to each pixel in the ultrasound beam
         sigma = self.min_sigma + torch.rand(()) * (self.max_sigma - self.min_sigma)
-        noise = sigma * torch.randn(*mask.shape)
+        noise = (sigma * torch.randn(*mask.shape)).to(device)
         noise = noise * mask
 
         # Add the Gaussian noise to the image

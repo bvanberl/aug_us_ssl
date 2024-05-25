@@ -24,7 +24,7 @@ class ConvexityMutation(nn.Module):
             square_roi: bool = False,
             min_top_width: float = 0.,
             max_top_width: float = 0.75,
-            point_thresh: float = 1.
+            point_thresh: float = 1.,
     ):
         """Initializes the NonLinearToLinear layer.
 
@@ -78,9 +78,11 @@ class ConvexityMutation(nn.Module):
 
         x1, y1, x2, y2, x3, y3, x4, y4 = keypoints
         c, h, w = image.shape
+        device = image.get_device()
+        device = 'cpu' if device == -1 else device
 
-        # If phased array with point at top, marginally move top keypoints laterally
-        if torch.abs(x2 - x1) < self.point_thresh and probe == Probe.PHASED_ARRAY.value:
+        # If beam has point at top, marginally move top keypoints laterally
+        if torch.abs(x2 - x1) < self.point_thresh:
             x1 -= 0.5
             x2 += 0.5
 
@@ -94,8 +96,8 @@ class ConvexityMutation(nn.Module):
         new_x1 = x_itn - (x_itn - x1) * top_width_scale
         new_x2 = x_itn + (x2 - x_itn) * top_width_scale
 
-        y_coords = torch.linspace(0, h - 1, h)
-        x_coords = torch.linspace(0, w - 1, w)
+        y_coords = torch.linspace(0, h - 1, h).to(device)
+        x_coords = torch.linspace(0, w - 1, w).to(device)
         yy, xx = torch.meshgrid(y_coords, x_coords, indexing='ij')
 
         # Determine point and angle of intersection of new lateral beam bounds

@@ -5,18 +5,19 @@ paths:
   model_weights: "results/models"
 
 data:
-  height: 224
-  width: 224
+  height: 128
+  width: 128
   min_pixel_value: 0.0
   max_pixel_value: 255.0
   num_channels: 3
+  resize: true
 
 pretrain:
   seed: 11
-  epochs: 10
+  epochs: 100
   batch_size: 512
   max_lr: 0.2
-  warmup_epochs: 1
+  warmup_epochs: 10
   weight_decay: 0.000001
   extractor: 'mobilenetv3'
   proj_nodes: [512, 512]
@@ -38,14 +39,14 @@ pretrain:
 
 train:
   seed: 11
-  label: 'ab_lines_label'
+  label: 'covid-us_label'
   linear: true
   epochs: 10
-  batch_size: 512
-  lr_head: 0.02
-  lr_extractor: 0.0
-  weight_decay: 0.000001
-  extractor: 'resnet14'
+  batch_size: 256
+  lr_head: 0.001
+  lr_extractor: 0.00
+  weight_decay: 0.001
+  extractor: 'mobilenetv3'
   extractor_weights: 'B:/Downloads/epoch=9-step=6020.ckpt'
   augment_pipeline: "supervised"
 
