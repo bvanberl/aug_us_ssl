@@ -78,13 +78,13 @@ class Classifier(pl.LightningModule):
         output_activation = nn.Sigmoid() if task == 'binary' else nn.Softmax()
         self.head = nn.Sequential(linear, output_activation)
 
-        self.loss = nn.BCELoss() if n_classes == 2 else nn.NLLLoss()
+        self.loss = nn.BCELoss() if n_classes == 2 else nn.CrossEntropyLoss()
 
         metrics = tm.MetricCollection([
             tm.Accuracy(task, num_classes=n_classes),
-            tm.Precision(task, num_classes=n_classes),
-            tm.Recall(task, num_classes=n_classes),
-            tm.F1Score(task, num_classes=n_classes),
+            tm.Precision(task, num_classes=n_classes, average='macro'),
+            tm.Recall(task, num_classes=n_classes, average='macro'),
+            tm.F1Score(task, num_classes=n_classes, average='macro'),
             tm.AUROC(task, num_classes=n_classes),
         ])
         self.train_metrics = metrics.clone(prefix='train/')
