@@ -75,7 +75,7 @@ class Classifier(pl.LightningModule):
         n_logits = 1 if task == 'binary' else n_classes
 
         linear = normal_init_linear(self.h_dim, n_logits)
-        output_activation = nn.Sigmoid() if task == 'binary' else nn.Softmax()
+        output_activation = nn.Sigmoid() if task == 'binary' else nn.Softmax(dim=1)
         self.head = nn.Sequential(linear, output_activation)
 
         self.loss = nn.BCELoss() if n_classes == 2 else nn.CrossEntropyLoss()

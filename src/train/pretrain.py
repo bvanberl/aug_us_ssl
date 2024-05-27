@@ -15,7 +15,6 @@ from src.data.image_datasets import load_data_for_pretrain
 from src.train.utils import *
 
 torchvision.disable_beta_transforms_warning()
-torch.set_float32_matmul_precision('high')
 
 cfg = yaml.full_load(open(os.getcwd() + "/config.yml", 'r'))
 if os.path.exists("./wandb.yml"):

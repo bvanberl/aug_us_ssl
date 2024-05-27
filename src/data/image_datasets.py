@@ -93,7 +93,10 @@ class ImageClassificationDataset(Dataset):
         self.img_ext = img_ext
         self.img_root_dir = img_root_dir
         self.n_classes = n_classes
-        self.labels = torch.from_numpy(labels)
+        if n_classes == 2:
+            self.labels = torch.from_numpy(labels. astype(np.float32)).unsqueeze(-1)
+        else:
+            self.labels = torch.from_numpy(labels)
         self.label_freqs = np.unique(labels, return_counts=True)[1] / len(labels)
         self.transforms = transforms
         self.device = device
@@ -489,7 +492,7 @@ def load_data_for_train(
             width,
             height,
             augment_pipeline="none",
-            shuffle=False,
+            shuffle=True,
             channels=3,
             n_workers=n_val_workers,
             drop_last=False,

@@ -170,11 +170,11 @@ def get_august_augmentations(
             p=probe_type_prob
         ),
         v2.RandomApply(
-            [ConvexityMutation(square_roi=True, min_top_width=0., max_top_width=0.5)],
+            [ConvexityMutation(square_roi=True, min_top_width=0., max_top_width=0.75)],
             p=convexity_prob
         ),
         v2.RandomApply([v2.GaussianBlur(gauss_kernel)], p=0.5),
-        #v2.RandomApply([GammaCorrection(min_gamma=0.5, max_gamma=2)], p=gamma_prob),
+        v2.RandomApply([GammaCorrection(min_gamma=0.5, max_gamma=2)], p=gamma_prob),
         v2.RandomApply(
             [BrightnessContrastChange(min_brightness=0.6, max_brightness=1.4, min_contrast=0.6, max_contrast=1.4)],
             p=brightness_contrast_prob
@@ -192,17 +192,17 @@ def get_august_augmentations(
             [GaussianNoise(min_sigma=0.5, max_sigma=2.5)],
             p=gaussian_prob
         ),
+        # v2.RandomApply(
+        #     [SaltAndPepperNoise(min_salt_frac=0.001, max_salt_frac=0.005, min_pepper_frac=0.001,
+        #                                             max_pepper_frac=0.005)],
+        #     p=sp_prob
+        # ),
         v2.RandomApply(
-            [SaltAndPepperNoise(min_salt_frac=0.001, max_salt_frac=0.005, min_pepper_frac=0.001,
-                                                    max_pepper_frac=0.005)],
-            p=sp_prob
-        ),
-        v2.RandomApply(
-            [RandomResizedCropKeypoint((height, width), scale=(0.7, 1.), antialias=True,
+            [RandomResizedCropKeypoint((height, width), scale=(0.25, 1.), antialias=True,
                                        interpolation=InterpolationMode.BICUBIC)],
-            p=1.0),
+            p=0.666),
         v2.RandomApply([HorizontalReflection()], p=reflect_prob),
-        v2.RandomApply([ShiftAndRotate(max_shift=0.2, max_rotation=22.5)], p=shift_rotate_prob),
+        v2.RandomApply([ShiftAndRotate(max_shift=0.2, max_rotation=12.25)], p=shift_rotate_prob),
         v2.ToDtype(torch.float32, scale=True),
         get_normalize_transform(mean_pixel_val, std_pixel_val)
     ]
