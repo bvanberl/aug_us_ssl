@@ -101,6 +101,7 @@ if __name__ == '__main__':
     run_cfg.update(cfg['data'])
     run_cfg.update(cfg['train'])
     run_cfg = {k.lower(): v for k, v in run_cfg.items()}
+    print(run_cfg)
 
     # Initialize wandb run
     train_type_tag = "linear" if cfg['train']['linear'] else "fine-tune"
@@ -164,7 +165,7 @@ if __name__ == '__main__':
         print(f"Checkpoint Dir: {checkpoint_dir}")
         run_cfg_path = os.path.join(checkpoint_dir, "run_cfg.json")
         with open(run_cfg_path, 'w') as f:
-            json.dump(run_cfg, f)
+            json.dump(run_cfg, f, indent=4)
         load_ckpt_path = None
 
     # Create loggers

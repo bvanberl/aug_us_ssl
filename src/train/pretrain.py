@@ -184,7 +184,7 @@ if __name__ == '__main__':
         print(f"Checkpoint Dir: {checkpoint_dir}")
         run_cfg_path = os.path.join(checkpoint_dir, "run_cfg.json")
         with open(run_cfg_path, 'w') as f:
-            json.dump(run_cfg, f)
+            json.dump(run_cfg, f, indent=4)
         load_ckpt_path = None
 
     # Create loggers

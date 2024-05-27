@@ -163,7 +163,7 @@ def prepare_pretrain_dataloader(
         n_workers: int = 0,
         drop_last: bool = False,
         resize: bool = True,
-        device: str = 'cuda',
+        device: str = 'cpu',
         **preprocess_kwargs
 ) -> DataLoader:
     '''
@@ -257,9 +257,6 @@ def prepare_train_dataloader(
     '''
 
     # Construct the dataset
-
-
-
     augmentations = get_augmentation_transforms(
         augment_pipeline,
         height,
@@ -276,13 +273,15 @@ def prepare_train_dataloader(
         transforms=augmentations
     )
 
+    persistent_workers = n_workers > 0
     data_loader = DataLoader(
         dataset,
         batch_size=batch_size,
         shuffle=shuffle,
         num_workers=n_workers,
         drop_last=drop_last,
-        pin_memory=False
+        pin_memory=True,
+        persistent_workers=persistent_workers
     )
     return data_loader
 
@@ -395,7 +394,7 @@ def load_data_for_pretrain(
             width,
             height,
             augment_pipeline="none",
-            shuffle=False,
+            shuffle=True,
             channels=3,
             n_workers=n_val_workers,
             drop_last=False,
