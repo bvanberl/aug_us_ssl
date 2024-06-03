@@ -127,6 +127,7 @@ def get_augmentation_transforms(
         height: int,
         width: int,
         resize: bool = True,
+        exclude_idx: int = -1,
         **augment_kwargs
 ) -> Compose:
     """Get augmentation transformation pipelines
@@ -140,11 +141,11 @@ def get_augmentation_transforms(
     """
     pipeline = pipeline.lower()
     if pipeline == "byol_original":
-        return get_original_byol_augmentations(height, width, resize=resize)
+        return get_original_byol_augmentations(height, width, resize=resize, exclude_idx=exclude_idx)
     if pipeline == "byol_grayscale":
-        return get_grayscale_byol_augmentations(height, width, resize=resize)
+        return get_grayscale_byol_augmentations(height, width, resize=resize, exclude_idx=exclude_idx)
     elif pipeline == "august":
-        return get_august_augmentations(height, width, resize=resize, **augment_kwargs)
+        return get_august_augmentations(height, width, resize=resize, exclude_idx=exclude_idx, **augment_kwargs)
     elif pipeline == "supervised":
         return get_supervised_augmentations(height, width, resize=resize, **augment_kwargs)
     else:
@@ -167,6 +168,7 @@ def prepare_pretrain_dataloader(
         drop_last: bool = False,
         resize: bool = True,
         device: str = 'cpu',
+        exclude_idx: int = -1,
         **preprocess_kwargs
 ) -> DataLoader:
     '''
@@ -193,14 +195,16 @@ def prepare_pretrain_dataloader(
         augment_pipeline,
         height,
         width,
-        resize=resize
+        resize=resize,
+        exclude_idx=exclude_idx
         #**preprocess_kwargs["augmentation"]
     )
     augment2 = get_augmentation_transforms(
         augment_pipeline,
         height,
         width,
-        resize=resize
+        resize=resize,
+        exclude_idx=exclude_idx
         # **preprocess_kwargs["augmentation"]
     )
 
@@ -301,6 +305,7 @@ def load_data_for_pretrain(
         n_train_workers: int = 0,
         n_val_workers: int = 0,
         resize: bool = True,
+        exclude_idx: int = -1,
         **preprocess_kwargs
 ) -> (DataLoader, pd.DataFrame):
     """
@@ -386,6 +391,7 @@ def load_data_for_pretrain(
         n_workers=n_train_workers,
         drop_last=True,
         resize=resize,
+        exclude_idx=exclude_idx,
         **preprocess_kwargs
     )
     if val_frames_df.shape[0] > 0:
@@ -402,6 +408,7 @@ def load_data_for_pretrain(
             n_workers=n_val_workers,
             drop_last=False,
             resize=resize,
+            exclude_idx=exclude_idx,
             **preprocess_kwargs
         )
     else:

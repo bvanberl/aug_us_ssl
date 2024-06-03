@@ -93,7 +93,7 @@ class DepthChange(nn.Module):
         return new_image, label, keypoints, new_mask, probe
 
 
-class ShiftAndRotate(nn.Module):
+class AffineKeypoint(nn.Module):
     """Transformation that randomly shifts and rotates an
     ultrasound beam.
     """
@@ -101,7 +101,9 @@ class ShiftAndRotate(nn.Module):
     def __init__(
             self,
             max_shift: float = 0.15,
-            max_rotation: float = 22.5
+            max_rotation: float = 22.5,
+            min_scale: float = 0.5,
+            max_scale: float = 2.0
     ):
         """Initializes the ShiftAndRotate layer.
 
@@ -109,10 +111,14 @@ class ShiftAndRotate(nn.Module):
             max_shift: Maximum vertical/horizontal shift
                               (as a fraction of image width)
             max_rotation: Maximum rotation (degrees)
+            min_scale: Minimum scaling/zoom factor (as a fraction of image dimension)
+            min_scale: Maximum scaling/zoom factor (as a fraction of image dimension)
         """
-        super(ShiftAndRotate, self).__init__()
+        super(AffineKeypoint, self).__init__()
         self.max_shift = max_shift
         self.max_rotation = max_rotation
+        self.min_scale = min_scale
+        self.max_scale = max_scale
 
     def forward(
             self,
@@ -151,16 +157,22 @@ class ShiftAndRotate(nn.Module):
         # Determine the rotation angle for the image
         angle = random.uniform(-self.max_rotation, self.max_rotation)
 
+        # Determine the scale/zoom for the image
+        scale = random.uniform(self.min_scale, self.max_scale)
+
+        # Determine center coordinates
+        center = [h // 2, w // 2]
+
         # Perform affine transform that scales and translates image
-        new_image = tvf.affine(image, angle, [translate_x, translate_y], 1., 0., InterpolationMode.BILINEAR)
-        new_mask = tvf.affine(mask, angle, [translate_x, translate_y], 1., 0., InterpolationMode.BILINEAR)
+        new_image = tvf.affine(image, angle, [translate_x, translate_y], scale, 0., InterpolationMode.BILINEAR, center=center)
+        new_mask = tvf.affine(mask, angle, [translate_x, translate_y], scale, 0., InterpolationMode.BILINEAR, center=center)
 
         # Get coordinates of new keypoints
-        sin_angle = math.sin(angle)
-        cos_angle = math.cos(angle)
+        sin_angle = math.sin(math.radians(angle))
+        cos_angle = math.cos(math.radians(angle))
         transform_matrix = torch.tensor([
-            [cos_angle, -sin_angle, translate_x],
-            [sin_angle, cos_angle, translate_y],
+            [scale * cos_angle, -sin_angle, translate_x],
+            [sin_angle, scale * cos_angle, translate_y],
             [0., 0., 1.]
         ], device=device)
         homogenous_kp = torch.concat([
@@ -168,7 +180,7 @@ class ShiftAndRotate(nn.Module):
             torch.ones((4, 1), device=device)
         ], dim=-1)
         new_homogenous_kp = torch.matmul(transform_matrix, homogenous_kp.T)
-        new_keypoints = new_homogenous_kp[:, :2].flatten()
+        new_keypoints = new_homogenous_kp.T[:, :2].flatten()
 
         return new_image, label, new_keypoints, new_mask, probe
 

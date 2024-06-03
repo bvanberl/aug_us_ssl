@@ -74,6 +74,8 @@ class ConvexityMutation(nn.Module):
         """
 
         if probe == Probe.LINEAR.value:
+
+            # Passthrough - linear probes are not convex
             return image, label, keypoints, mask, probe
 
         x1, y1, x2, y2, x3, y3, x4, y4 = keypoints

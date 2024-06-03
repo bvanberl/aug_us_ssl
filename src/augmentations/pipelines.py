@@ -57,6 +57,7 @@ def get_grayscale_byol_augmentations(
         resize: bool = True,
         mean_pixel_val: List[float] = None,
         std_pixel_val: List[float] = None,
+        exclude_idx: int = -1
 ) -> v2.Compose:
     """
     Applies random data transformations according to the data augmentations
@@ -67,6 +68,8 @@ def get_grayscale_byol_augmentations(
     :param Desired input channels
     :param mean_pixel_val: Channel-wise means
     :param std_pixel_val: Channel-wise standard deviation
+    :param exclude_idx: If not -1, the index of a transform to exclude.
+                        Used for augmentation ablations.
     :return: Callable augmentation pipeline
     """
     gauss_kernel = int(23 * height / 224) # Scale to size of images
@@ -79,6 +82,8 @@ def get_grayscale_byol_augmentations(
         v2.ToDtype(torch.float32, scale=True),
         get_normalize_transform(mean_pixel_val, std_pixel_val)
     ]
+    if exclude_idx > -1:
+        transforms.pop(exclude_idx)     # Leave out one transformation
     if resize:
         transforms.insert(0, v2.Resize((height, width)))
     return v2.Compose(transforms)
@@ -90,6 +95,7 @@ def get_original_byol_augmentations(
         resize: bool = True,
         mean_pixel_val: List[float] = None,
         std_pixel_val: List[float] = None,
+        exclude_idx: int = -1
 ) -> v2.Compose:
     """
     Applies random data transformations according to the data augmentations
@@ -100,6 +106,8 @@ def get_original_byol_augmentations(
     :param Desired input channels
     :param mean_pixel_val: Channel-wise means
     :param std_pixel_val: Channel-wise standard deviation
+    :param exclude_idx: If not -1, the index of a transform to exclude.
+                        Used for augmentation ablations.
     :return: Callable augmentation pipeline
     """
     gauss_kernel = int(23 * height / 224)  # Scale to size of images
@@ -113,6 +121,8 @@ def get_original_byol_augmentations(
         v2.ToDtype(torch.float32, scale=True),
         get_normalize_transform(mean_pixel_val, std_pixel_val)
     ]
+    if exclude_idx > -1:
+        transforms.pop(exclude_idx)     # Leave out one transformation
     if resize:
         transforms.insert(0, v2.Resize((height, width)))
     return v2.Compose(transforms)
@@ -129,12 +139,13 @@ def get_august_augmentations(
         depth_prob: float = 0.5,
         speckle_prob: float = 0.333,
         gaussian_prob: float = 0.333,
-        sp_prob: float = 0.15,
+        sp_prob: float = 0.1,
         shift_rotate_prob: float = 0.5,
         reflect_prob: float = 0.5,
         resize: bool = True,
         mean_pixel_val: List[float] = None,
-        std_pixel_val: List[float] = None
+        std_pixel_val: List[float] = None,
+        exclude_idx: int = -1
 ):
     """Applies random transformations to input B-mode image.
 
@@ -153,18 +164,20 @@ def get_august_augmentations(
     :param reflect_prob: Probability of horizontal reflection augmentation
     :param mean_pixel_val: Channel-wise means
     :param std_pixel_val: Channel-wise standard deviation
+    :param exclude_idx: If not -1, the index of a transform to exclude.
+                        Used for augmentation ablations.
     :return: Callable augmentation pipeline
     """
     gauss_kernel = 13
     transforms = [
-        # v2.RandomApply(
-        #     [WaveletDenoise(j_0=2, j=3, min_alpha=2.5, max_alpha=3.5)],
-        #     p=wavelet_denoise_prob
-        # ),
-        # v2.RandomApply(
-        #     [CLAHETransform(min_clip_limit=5, max_clip_limit=10, tile_grid_size=(6, 6))],
-        #     p=clahe_prob
-        # ),
+        v2.RandomApply(
+            [WaveletDenoise(j_0=2, j=3, min_alpha=2.5, max_alpha=3.5)],
+            p=wavelet_denoise_prob
+        ),
+        v2.RandomApply(
+            [CLAHETransform(min_clip_limit=5, max_clip_limit=10, tile_grid_size=(6, 6))],
+            p=0.3333
+        ),
         v2.RandomApply(
             [ProbeTypeChange(square_roi=True, min_linear_width_frac=0.5, max_linear_width_frac=1.0)],
             p=probe_type_prob
@@ -173,7 +186,7 @@ def get_august_augmentations(
             [ConvexityMutation(square_roi=True, min_top_width=0., max_top_width=0.75)],
             p=convexity_prob
         ),
-        v2.RandomApply([v2.GaussianBlur(gauss_kernel)], p=0.5),
+        #v2.RandomApply([v2.GaussianBlur(gauss_kernel)], p=0.5),
         v2.RandomApply([GammaCorrection(min_gamma=0.5, max_gamma=2)], p=gamma_prob),
         v2.RandomApply(
             [BrightnessContrastChange(min_brightness=0.6, max_brightness=1.4, min_contrast=0.6, max_contrast=1.4)],
@@ -192,20 +205,22 @@ def get_august_augmentations(
             [GaussianNoise(min_sigma=0.5, max_sigma=2.5)],
             p=gaussian_prob
         ),
-        # v2.RandomApply(
-        #     [SaltAndPepperNoise(min_salt_frac=0.001, max_salt_frac=0.005, min_pepper_frac=0.001,
-        #                                             max_pepper_frac=0.005)],
-        #     p=sp_prob
-        # ),
         v2.RandomApply(
-            [RandomResizedCropKeypoint((height, width), scale=(0.25, 1.), antialias=True,
-                                       interpolation=InterpolationMode.BICUBIC)],
-            p=0.666),
+            [SaltAndPepperNoise(min_salt_frac=0.001, max_salt_frac=0.005, min_pepper_frac=0.001,
+                                                    max_pepper_frac=0.005)],
+            p=sp_prob
+        ),
+        # v2.RandomApply(
+        #     [RandomResizedCropKeypoint((height, width), scale=(0.15, 1.), antialias=True,
+        #                                interpolation=InterpolationMode.BICUBIC)],
+        #     p=0.8),
         v2.RandomApply([HorizontalReflection()], p=reflect_prob),
-        v2.RandomApply([ShiftAndRotate(max_shift=0.2, max_rotation=12.25)], p=shift_rotate_prob),
+        v2.RandomApply([AffineKeypoint(max_shift=0.2, max_rotation=45, min_scale=0.5, max_scale=1.5)], p=shift_rotate_prob),
         v2.ToDtype(torch.float32, scale=True),
         get_normalize_transform(mean_pixel_val, std_pixel_val)
     ]
+    if exclude_idx > -1:
+        transforms.pop(exclude_idx)     # Leave out one transformation
     if resize:
         transforms.insert(0, ResizeKeypoint(size=[height, width]))
     return v2.Compose(transforms)
