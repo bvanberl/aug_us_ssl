@@ -34,6 +34,7 @@ if __name__ == '__main__':
     parser.add_argument('--gpus_per_node', default=1, type=int, help='Number of GPUs per node')
     parser.add_argument('--log_interval', default=1, type=int, help='Number of steps after which to log')
     parser.add_argument('--epochs', required=False, type=int, help='Number of pretraining epochs')
+    parser.add_argument('--warmup_epochs', required=False, type=int, help='Number of warmup pretraining epochs')
     parser.add_argument('--batch_size', required=False, type=int, help='Pretraining batch size')
     parser.add_argument('--augment_pipeline', required=False, type=str, default=None, help='Augmentation pipeline')
     parser.add_argument('--num_train_workers', required=False, type=int, default=0, help='Number of workers for loading train set')
@@ -113,7 +114,7 @@ if __name__ == '__main__':
         n_train_workers=n_train_workers,
         n_val_workers=n_val_workers,
         resize=resize,
-        exclude_idx=exclude_idx
+        exclude_idx=exclude_idx,
         **hparams
     )
 

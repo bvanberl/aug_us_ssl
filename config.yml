@@ -44,7 +44,7 @@ train:
   linear: false
   epochs: 10
   batch_size: 256
-  lr_head: 0.002
+  lr_head: 0.02
   lr_extractor: 0.0002
   weight_decay: 0.000001
   extractor: 'mobilenetv3'

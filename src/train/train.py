@@ -41,6 +41,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_train_workers', required=False, type=int, default=0, help='Number of workers for loading train set')
     parser.add_argument('--num_val_workers', required=False, type=int, default=0, help='Number of workers for loading val set')
     parser.add_argument('--seed', required=False, type=int, help='Random seed')
+    parser.add_argument('--checkpoint_dir', required=False, type=str, help='Directory in which to save checkpoints')
     parser.add_argument('--checkpoint_path', required=False, type=str, help='Checkpoint to resume from')
     parser.add_argument('--labelled_only', required=False, type=int, help='Whether to use only examples with labels')
     parser.add_argument('--label', required=False, type=str, help='Name of label column')
@@ -159,7 +160,10 @@ if __name__ == '__main__':
 
         # Set checkpoint/log dir and save the run config as a JSON file
         date = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-        checkpoint_dir = os.path.join(cfg['paths']['model_weights'], 'classifiers', label_name, date)
+        if args['checkpoint_dir']:
+            checkpoint_dir = args['checkpoint_dir']
+        else:
+            checkpoint_dir = os.path.join(cfg['paths']['model_weights'], 'classifiers', label_name, date)
         os.makedirs(checkpoint_dir, exist_ok=True)
         print(f"Checkpoint Dir: {checkpoint_dir}")
         run_cfg_path = os.path.join(checkpoint_dir, "run_cfg.json")
