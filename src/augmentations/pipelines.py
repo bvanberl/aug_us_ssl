@@ -145,7 +145,8 @@ def get_august_augmentations(
         resize: bool = True,
         mean_pixel_val: List[float] = None,
         std_pixel_val: List[float] = None,
-        exclude_idx: int = -1
+        exclude_idx: int = -1,
+        square_roi: bool = False
 ):
     """Applies random transformations to input B-mode image.
 
@@ -171,20 +172,20 @@ def get_august_augmentations(
     gauss_kernel = 13
     transforms = [
         v2.RandomApply(
+            [ProbeTypeChange(square_roi=square_roi, min_linear_width_frac=0.5, max_linear_width_frac=1.0)],
+            p=probe_type_prob
+        ),
+        v2.RandomApply(
+            [ConvexityMutation(square_roi=square_roi, min_top_width=0., max_top_width=0.75)],
+            p=convexity_prob
+        ),
+        v2.RandomApply(
             [WaveletDenoise(j_0=2, j=3, min_alpha=2.5, max_alpha=3.5)],
             p=wavelet_denoise_prob
         ),
         v2.RandomApply(
             [CLAHETransform(min_clip_limit=5, max_clip_limit=10, tile_grid_size=(6, 6))],
             p=0.3333
-        ),
-        v2.RandomApply(
-            [ProbeTypeChange(square_roi=True, min_linear_width_frac=0.5, max_linear_width_frac=1.0)],
-            p=probe_type_prob
-        ),
-        v2.RandomApply(
-            [ConvexityMutation(square_roi=True, min_top_width=0., max_top_width=0.75)],
-            p=convexity_prob
         ),
         #v2.RandomApply([v2.GaussianBlur(gauss_kernel)], p=0.5),
         v2.RandomApply([GammaCorrection(min_gamma=0.5, max_gamma=2)], p=gamma_prob),
@@ -222,7 +223,7 @@ def get_august_augmentations(
     if exclude_idx > -1:
         transforms.pop(exclude_idx)     # Leave out one transformation
     if resize:
-        transforms.insert(0, ResizeKeypoint(size=[height, width]))
+        transforms.insert(2, ResizeKeypoint(size=[height, width]))
     return v2.Compose(transforms)
 
 

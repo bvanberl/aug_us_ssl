@@ -1,5 +1,6 @@
 import random
 
+import numpy as np
 import torch
 from torch import nn, Tensor
 from torchvision.transforms.v2 import functional as tvf, Transform
@@ -7,6 +8,7 @@ from torchvision.transforms import InterpolationMode as im
 
 from src.constants import BeamKeypoints, Probe
 from src.augmentations.aug_utils import *
+from src.data.utils import get_beam_mask
 
 class ConvexityMutation(nn.Module):
     """Preprocessing layer that warps convex ultrasound images.
@@ -68,9 +70,11 @@ class ConvexityMutation(nn.Module):
                        with format [x1, y1, x2, y2, x3, y3, x4, y4]
             mask: Beam mask, with shape (1, h, w)
             probe: Probe type of the image
+            orig_h: Original height of the image
+            orig_w: Original width of the image
 
         Returns:
-            augmented image, transformed keypoints, new probe type (linear)
+            augmented image, transformed keypoints, new probe type (linear), height, width
         """
 
         if probe == Probe.LINEAR.value:
@@ -107,19 +111,27 @@ class ConvexityMutation(nn.Module):
         new_theta = get_angle_of_intersection(x3, y3, x4, y4, new_x_itn, new_y_itn)
 
         # Calculate polar coordinates with respect to new beam shape
-        new_phi = torch.atan2(xx - new_x_itn, yy - new_y_itn)
-        new_r = torch.sqrt((new_x_itn - xx)**2 + (new_y_itn - yy)**2)
+        new_xx_c = xx - new_x_itn
+        new_yy_c = yy - new_y_itn
+        new_phi = torch.atan2(new_xx_c, new_yy_c)
+        dists = torch.sqrt(new_xx_c**2 + new_yy_c**2)
+
+        new_r = torch.sqrt((x3 - new_x_itn)**2 + (y3 - new_y_itn)**2)
+        old_r = torch.sqrt((x3 - x_itn)**2 + (y3 - y_itn)**2)
 
         # Determine angular and radius ratios for old:new beam
         theta_ratio = theta / new_theta
-        rad_ratio = (yy - y_itn) * torch.cos(new_theta / 2.) / torch.cos(theta / 2.) / (yy - new_y_itn)
+        old_top_r = torch.sqrt((x_itn - x1)**2 + (y_itn - y1)**2)
+        new_top_r = torch.sqrt((new_x_itn - new_x1) ** 2 + (new_y_itn - y1) ** 2)
+        rad_ratio = (old_r - old_top_r) / (new_r - new_top_r)
 
         # Compute mapping from new image to old image coordinates
-        new_xx = x_itn + new_r * rad_ratio * torch.sin(theta_ratio * new_phi)
-        new_yy = y_itn + new_r * rad_ratio * torch.cos(theta_ratio * new_phi)
+        rad_scaling = ((dists - new_top_r) * rad_ratio + old_top_r)
+        new_xx = x_itn + rad_scaling * torch.sin(theta_ratio * new_phi)
+        new_yy = y_itn + rad_scaling * torch.cos(theta_ratio * new_phi)
 
-        # If square ROI, beam was not initially circular.
-        # Resize so that bottom of beam coincides with bottom of image.
+        # If square ROI, beam was not initially circular and bottom of beam coincided with
+        # bottom of image. Adjust so that bottom of beam coincides with bottom of image.
         if self.square_roi:
             vertical_adjust = (h - 1) / new_yy[-1, x_itn.int()]
             new_yy = new_yy * vertical_adjust
@@ -136,13 +148,8 @@ class ConvexityMutation(nn.Module):
         new_xx = new_xx / w * 2. - 1.
         adjusted_grid = torch.stack([new_xx, new_yy], dim=-1)
 
-        # Construct new image using values from old image
-        new_image = nn.functional.grid_sample(image.unsqueeze(0).float(), adjusted_grid.unsqueeze(0), align_corners=False).squeeze(0)
-        new_mask = nn.functional.grid_sample(mask.unsqueeze(0).float(), adjusted_grid.unsqueeze(0), align_corners=False).squeeze(0)
-        new_image = (new_image * new_mask).to(torch.uint8)
-
         # Determine new keypoints
-        new_keypoints = torch.stack([
+        new_keypoints = np.array([
             new_x1,
             y1,
             new_x2,
@@ -152,6 +159,13 @@ class ConvexityMutation(nn.Module):
             x4,
             new_y4
         ])
+
+        # Construct new image using values from old image
+        new_image = nn.functional.grid_sample(image.unsqueeze(0).float(), adjusted_grid.unsqueeze(0), align_corners=False).squeeze(0)
+        new_mask = tvf.pil_to_tensor(get_beam_mask(h, w, new_keypoints, probe, self.square_roi, 'L'))
+        new_image = (new_image * new_mask).to(torch.uint8)
+        new_keypoints = torch.from_numpy(new_keypoints)
+
 
         return new_image, label, new_keypoints, new_mask, probe
 

@@ -66,6 +66,7 @@ class ImagePretrainDataset(Dataset):
         keypoints = torch.tensor(self.keypoints[idx], device=self.device)
         probe_type = torch.tensor(self.probe_types[idx], device=self.device)
 
+
         # Apply data augmentation transforms
         try:
             if self.transforms1:
