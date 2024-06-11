@@ -132,6 +132,7 @@ def get_august_augmentations(
         height: int,
         width: int,
         wavelet_denoise_prob: float = 0.5,
+        clahe_prob: float = 0.2,
         brightness_contrast_prob: float = 0.5,
         gamma_prob: float = 0.5,
         probe_type_prob: float = 0.3,
@@ -169,7 +170,6 @@ def get_august_augmentations(
                         Used for augmentation ablations.
     :return: Callable augmentation pipeline
     """
-    gauss_kernel = 13
     transforms = [
         v2.RandomApply(
             [ProbeTypeChange(square_roi=square_roi, min_linear_width_frac=0.5, max_linear_width_frac=1.0)],
@@ -184,21 +184,20 @@ def get_august_augmentations(
             p=wavelet_denoise_prob
         ),
         v2.RandomApply(
-            [CLAHETransform(min_clip_limit=5, max_clip_limit=10, tile_grid_size=(6, 6))],
-            p=0.3333
+            [CLAHETransform(min_clip_limit=4, max_clip_limit=8, tile_grid_size=(6, 6))],
+            p=clahe_prob
         ),
-        #v2.RandomApply([v2.GaussianBlur(gauss_kernel)], p=0.5),
         v2.RandomApply([GammaCorrection(min_gamma=0.5, max_gamma=2)], p=gamma_prob),
         v2.RandomApply(
             [BrightnessContrastChange(min_brightness=0.6, max_brightness=1.4, min_contrast=0.6, max_contrast=1.4)],
             p=brightness_contrast_prob
         ),
-        # v2.RandomApply(
-        #     [DepthChange(min_depth_factor=0.8, max_depth_factor=3)],
-        #     p=depth_prob
-        # ),
         v2.RandomApply(
-            [SpeckleNoise(square_roi=True, min_lateral_res=35, max_lateral_res=45,
+            [DepthChange(min_depth_factor=0.8, max_depth_factor=2)],
+            p=depth_prob
+        ),
+        v2.RandomApply(
+            [SpeckleNoise(square_roi=square_roi, min_lateral_res=35, max_lateral_res=45,
                                    min_axial_res=75, max_axial_res=85, min_phasors=5, max_phasors=10)],
                       p=speckle_prob
         ),
@@ -211,12 +210,8 @@ def get_august_augmentations(
                                                     max_pepper_frac=0.005)],
             p=sp_prob
         ),
-        # v2.RandomApply(
-        #     [RandomResizedCropKeypoint((height, width), scale=(0.15, 1.), antialias=True,
-        #                                interpolation=InterpolationMode.BICUBIC)],
-        #     p=0.8),
         v2.RandomApply([HorizontalReflection()], p=reflect_prob),
-        v2.RandomApply([AffineKeypoint(max_shift=0.2, max_rotation=45, min_scale=0.5, max_scale=1.5)], p=shift_rotate_prob),
+        v2.RandomApply([AffineKeypoint(max_shift=0.2, max_rotation=45, min_scale=1.0, max_scale=1.0)], p=shift_rotate_prob),
         v2.ToDtype(torch.float32, scale=True),
         get_normalize_transform(mean_pixel_val, std_pixel_val)
     ]

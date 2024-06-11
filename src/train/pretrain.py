@@ -44,6 +44,7 @@ if __name__ == '__main__':
     parser.add_argument('--resume_checkpoint', required=False, type=str, help='Checkpoint to resume from')
     parser.add_argument('--labelled_only', required=False, type=int, help='Whether to use only examples with labels')
     parser.add_argument('--exclude_idx', required=False, type=int, help='Index of transform to exclude')
+    parser.add_argument('--square_roi', required=False, type=int, help='1 if images cropped and resized to square; 0 otherwise')
 
     args = vars(parser.parse_args())
     print(f"Args: {args}")
@@ -85,6 +86,7 @@ if __name__ == '__main__':
     batch_size = cfg['pretrain']['batch_size']
     resize = bool(cfg['data']['resize'])
     exclude_idx = cfg['pretrain']['exclude_idx']
+    square_roi = bool(cfg['pretrain']['square_roi'])
 
     # Determine data augmentation pipeline
     if args["augment_pipeline"] is not None:
@@ -115,6 +117,7 @@ if __name__ == '__main__':
         n_val_workers=n_val_workers,
         resize=resize,
         exclude_idx=exclude_idx,
+        square_roi=square_roi,
         **hparams
     )
 

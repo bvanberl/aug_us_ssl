@@ -129,6 +129,7 @@ def get_augmentation_transforms(
         width: int,
         resize: bool = True,
         exclude_idx: int = -1,
+        square_roi: bool = True,
         **augment_kwargs
 ) -> Compose:
     """Get augmentation transformation pipelines
@@ -146,7 +147,7 @@ def get_augmentation_transforms(
     if pipeline == "byol_grayscale":
         return get_grayscale_byol_augmentations(height, width, resize=resize, exclude_idx=exclude_idx)
     elif pipeline == "august":
-        return get_august_augmentations(height, width, resize=resize, exclude_idx=exclude_idx, **augment_kwargs)
+        return get_august_augmentations(height, width, resize=resize, exclude_idx=exclude_idx, square_roi=square_roi, **augment_kwargs)
     elif pipeline == "supervised":
         return get_supervised_augmentations(height, width, resize=resize, **augment_kwargs)
     else:
@@ -170,6 +171,7 @@ def prepare_pretrain_dataloader(
         resize: bool = True,
         device: str = 'cpu',
         exclude_idx: int = -1,
+        square_roi: bool = True,
         **preprocess_kwargs
 ) -> DataLoader:
     '''
@@ -188,6 +190,7 @@ def prepare_pretrain_dataloader(
     :param drop_last: If True, drops the last batch in the data loader if smaller than the batch size
     :param device: Device on which to execute data transformations
     :param preprocess_kwargs: Keyword arguments for preprocessing
+    :param shuffle: Flag indicating whether the US beam is cropped and resized to be square
     :return: A batched dataset ready for iterating over preprocessed batches
     '''
 
@@ -197,7 +200,8 @@ def prepare_pretrain_dataloader(
         height,
         width,
         resize=resize,
-        exclude_idx=exclude_idx
+        exclude_idx=exclude_idx,
+        square_roi=square_roi,
         #**preprocess_kwargs["augmentation"]
     )
     augment2 = get_augmentation_transforms(
@@ -205,7 +209,8 @@ def prepare_pretrain_dataloader(
         height,
         width,
         resize=resize,
-        exclude_idx=exclude_idx
+        exclude_idx=exclude_idx,
+        square_roi=square_roi
         # **preprocess_kwargs["augmentation"]
     )
 
@@ -307,6 +312,7 @@ def load_data_for_pretrain(
         n_val_workers: int = 0,
         resize: bool = True,
         exclude_idx: int = -1,
+        square_roi: bool = True,
         **preprocess_kwargs
 ) -> (DataLoader, pd.DataFrame):
     """
@@ -393,6 +399,7 @@ def load_data_for_pretrain(
         drop_last=True,
         resize=resize,
         exclude_idx=exclude_idx,
+        square_roi=square_roi,
         **preprocess_kwargs
     )
     if val_frames_df.shape[0] > 0:
@@ -410,6 +417,7 @@ def load_data_for_pretrain(
             drop_last=False,
             resize=resize,
             exclude_idx=exclude_idx,
+            square_roi=square_roi,
             **preprocess_kwargs
         )
     else:
