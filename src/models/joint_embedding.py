@@ -31,7 +31,8 @@ class JointEmbeddingModel(pl.LightningModule):
             weight_decay: float = 1e-6,
             warmup_epochs: int = 10,
             scheduler_epochs: int = 100,
-            world_size=1
+            world_size=1,
+            train_metric_freq = 100
         ):
         """
         Args:
@@ -52,7 +53,7 @@ class JointEmbeddingModel(pl.LightningModule):
         """
 
         assert warmup_epochs <= scheduler_epochs, \
-            "Number of warmup epochs cannot exeed scheduler epochs"
+            "Number of warmup epochs cannot exceed scheduler epochs"
         super().__init__()
         self.save_hyperparameters()
         self.distributed = world_size > 1
@@ -75,6 +76,7 @@ class JointEmbeddingModel(pl.LightningModule):
         self.weight_decay = weight_decay
         self.warmup_epochs = warmup_epochs
         self.scheduler_epochs = scheduler_epochs
+        self.train_metric_freq = train_metric_freq
 
         self.extractor = get_extractor(
             extractor_name,
@@ -110,10 +112,12 @@ class JointEmbeddingModel(pl.LightningModule):
         loss, loggables = self.loss(z0, z1)
 
         # Log the loss, loss components, standard deviation of embeddings
-        self.log(f"train/loss", loss, prog_bar=True, on_step=True, on_epoch=True)
-        self.log_dict({f"train/{key}": loggables[key] for key in loggables}, prog_bar=True, on_step=True, on_epoch=True)
-        self.log(f"train/z0_std", z0.std(dim=1).mean(), on_step=True, on_epoch=True)
-        self.log(f"train/z1_std", z1.std(dim=1).mean(), on_step=True, on_epoch=True)
+
+        if batch_idx % self.train_metric_freq == 0:
+            self.log('train/loss', loss, on_step=True, on_epoch=True, prog_bar=True, sync_dist=self.distributed)
+            self.log_dict({f"train/{key}": loggables[key] for key in loggables}, prog_bar=True, on_step=True, on_epoch=True, sync_dist=True)
+            self.log(f"train/z0_std", z0.std(dim=1).mean(), on_step=True, on_epoch=True, sync_dist=True)
+            self.log(f"train/z1_std", z1.std(dim=1).mean(), on_step=True, on_epoch=True, sync_dist=True)
 
         return loss
 

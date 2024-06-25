@@ -47,7 +47,7 @@ if __name__ == '__main__':
     parser.add_argument('--square_roi', required=False, type=int, help='1 if images cropped and resized to square; 0 otherwise')
 
     args = vars(parser.parse_args())
-    print(f"Args: {args}")
+    print(f"Args: {json.dumps(args, indent=2)}")
 
     num_nodes = args['nodes']
     num_gpus = args['gpus_per_node']
@@ -64,7 +64,8 @@ if __name__ == '__main__':
     for k in cfg['pretrain']:
         if k in args and args[k] is not None:
             cfg['pretrain'][k] = args[k]
-    print(f"Config after parsing args: {cfg}")
+    print(f"Data config after parsing args:\n {json.dumps(cfg['data'], indent=2)}")
+    print(f"Train config after parsing args:\n {json.dumps(cfg['pretrain'], indent=2)}")
 
     # Determine SSL method and any associated hyperparameters
     method = cfg['pretrain']['method'].lower()
@@ -154,7 +155,7 @@ if __name__ == '__main__':
         # Resume from checkpoint
         load_ckpt_path = args['resume_checkpoint']
         model = JointEmbeddingModel.load_from_checkpoint(load_ckpt_path)
-        checkpoint_dir = os.path.dirname(load_ckpt_path)
+        checkpoint_dir = load_ckpt_path[:(load_ckpt_path.index('lightning_logs') - 6)]
         epochs = model.scheduler_epochs
 
     else:
@@ -215,8 +216,8 @@ if __name__ == '__main__':
         logger=loggers,
         default_root_dir=checkpoint_dir,
         callbacks=callbacks,
-        log_every_n_steps=args['log_interval'],
-        profiler='advanced'
+        log_every_n_steps=args['log_interval']
+        #profiler='advanced'
     )
     #trainer.fit(model, train_loader, val_loader, ckpt_path=load_ckpt_path)
     trainer.fit(model, train_loader, ckpt_path=load_ckpt_path)

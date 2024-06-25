@@ -1,4 +1,5 @@
 from typing import Tuple, Dict
+import gc
 
 import torch
 import torch.nn as nn
@@ -42,7 +43,9 @@ class Classifier(pl.LightningModule):
             lr_extractor: float,
             epochs: int = 10,
             weight_decay: float = 1e-6,
-            linear: bool = False
+            linear: bool = False,
+            world_size: int = 1,
+            train_metric_freq: int = 100
         ):
         """
         Args:
@@ -69,6 +72,8 @@ class Classifier(pl.LightningModule):
         self.lr_extractor = lr_extractor
         self.epochs = epochs
         self.weight_decay = weight_decay
+        self.distributed = world_size > 1
+        self.train_metric_freq = train_metric_freq
 
         self.h_dim = self.extractor(torch.randn(*((1,) + input_shape)).cuda()).shape[-1]
         task = 'multiclass' if self.n_classes > 2 else 'binary'
@@ -107,10 +112,16 @@ class Classifier(pl.LightningModule):
         loss = self.loss(y_hat, y)
 
         # Log the loss and metrics
-        self.log('train/loss', loss, on_step=True, on_epoch=True, prog_bar=True)
         metrics_dict = self.train_metrics(y_hat, y)
-        self.log_dict(metrics_dict, on_step=True, on_epoch=True, prog_bar=True)
+        if batch_idx % self.train_metric_freq == 0:
+            self.log('train/loss', loss, on_step=True, on_epoch=True, prog_bar=True, sync_dist=self.distributed)
+            self.log_dict(metrics_dict, on_step=True, on_epoch=True, prog_bar=True, sync_dist=self.distributed)
         return loss
+
+    def on_train_epoch_end(self):
+
+        self.log_dict(self.train_metrics.compute(), on_epoch=True, prog_bar=True, sync_dist=self.distributed)
+        self.train_metrics.reset()
 
     def validation_step(self, batch, batch_idx):
 
@@ -120,10 +131,13 @@ class Classifier(pl.LightningModule):
         loss = self.loss(y_hat, y)
 
         # Log the loss and metrics
-        self.log('val/loss', loss, on_step=False, on_epoch=True, prog_bar=True)
-        metrics_dict = self.val_metrics(y_hat, y)
-        self.log_dict(metrics_dict, on_step=False, on_epoch=True, prog_bar=True)
+        self.val_metrics(y_hat, y)
         return loss
+    
+    def on_validation_epoch_end(self):
+
+        self.log_dict(self.val_metrics.compute(), on_epoch=True, prog_bar=True, sync_dist=self.distributed)
+        self.val_metrics.reset()
 
     def configure_optimizers(self):
         param_groups = [dict(params=self.head.parameters(), lr=self.lr_head)]

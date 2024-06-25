@@ -25,7 +25,7 @@ pretrain:
   imagenet_weights: true
   labelled_only: true
   method: "simclr"
-  augment_pipeline: "august"
+  augment_pipeline: "august_refined"
   n_cutoff_layers: 0
   exclude_idx: -1
   square_roi: 0
@@ -51,6 +51,3 @@ train:
   extractor: 'mobilenetv3'
   extractor_weights: 'B:/Downloads/epoch=9-step=6020.ckpt'
   augment_pipeline: "supervised"
-
-augment:
-  august:

@@ -46,7 +46,7 @@ if __name__ == '__main__':
     parser.add_argument('--labelled_only', required=False, type=int, help='Whether to use only examples with labels')
     parser.add_argument('--label', required=False, type=str, help='Name of label column')
     args = vars(parser.parse_args())
-    print(f"Args: {args}")
+    print(f"Args: {json.dumps(args, indent=2)}")
 
     num_nodes = args['nodes']
     num_gpus = args['gpus_per_node']
@@ -63,7 +63,8 @@ if __name__ == '__main__':
     for k in cfg['train']:
         if k in args and args[k] is not None:
             cfg['train'][k] = args[k]
-    print(f"Config after parsing args: {cfg}")
+    print(f"Data config after parsing args:\n {json.dumps(cfg['data'], indent=2)}")
+    print(f"Train config after parsing args:\n {json.dumps(cfg['train'], indent=2)}")
 
     # Specify image directory, splits CSV directory, image shape, batch size
     image_dir = args['image_dir'] if args['image_dir'] else cfg["paths"]["images"]
@@ -154,7 +155,8 @@ if __name__ == '__main__':
             cfg['train']['lr_extractor'],
             epochs,
             cfg['train']['weight_decay'],
-            bool(cfg['train']['linear'])
+            bool(cfg['train']['linear']),
+            world_size
         )
         model.summary()
 

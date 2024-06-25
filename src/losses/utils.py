@@ -33,7 +33,7 @@ def multiclass_accuracy(logits: Tensor, labels: Tensor):
     _, pred_classes = pred_probs.max(dim=1)
 
     # Calculate accuracy by comparing predicted classes to true labels
-    correct = torch.sum(pred_classes == labels).item()
+    correct = torch.sum(pred_classes == labels)
     total = labels.size(0)
     accuracy = correct / total
     return accuracy

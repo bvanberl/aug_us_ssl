@@ -35,20 +35,20 @@ class ResizeKeypoint(nn.Module):
 
         log_ratio = self._log_ratio
         for _ in range(10):
-            target_area = area * torch.empty(1).uniform_(self.scale[0], self.scale[1]).item()
+            target_area = area * torch.empty(1).uniform_(self.scale[0], self.scale[1]).detach().cpu().numpy().item()
             aspect_ratio = torch.exp(
                 torch.empty(1).uniform_(
                     log_ratio[0],  # type: ignore[arg-type]
                     log_ratio[1],  # type: ignore[arg-type]
                 )
-            ).item()
+            ).detach().cpu().numpy().item()
 
             w = int(round(math.sqrt(target_area * aspect_ratio)))
             h = int(round(math.sqrt(target_area / aspect_ratio)))
 
             if 0 < w <= width and 0 < h <= height:
-                i = torch.randint(0, height - h + 1, size=(1,)).item()
-                j = torch.randint(0, width - w + 1, size=(1,)).item()
+                i = torch.randint(0, height - h + 1, size=(1,)).detach().cpu().numpy().item()
+                j = torch.randint(0, width - w + 1, size=(1,)).detach().cpu().numpy().item()
                 break
         else:
             # Fallback to central crop
@@ -162,20 +162,20 @@ class RandomResizedCropKeypoint(nn.Module):
 
         log_ratio = self._log_ratio
         for _ in range(10):
-            target_area = area * torch.empty(1).uniform_(self.scale[0], self.scale[1]).item()
+            target_area = area * torch.empty(1).uniform_(self.scale[0], self.scale[1])
             aspect_ratio = torch.exp(
                 torch.empty(1).uniform_(
                     log_ratio[0],  # type: ignore[arg-type]
                     log_ratio[1],  # type: ignore[arg-type]
                 )
-            ).item()
+            ).detach().cpu().numpy().item()
 
             w = int(round(math.sqrt(target_area * aspect_ratio)))
             h = int(round(math.sqrt(target_area / aspect_ratio)))
 
             if 0 < w <= width and 0 < h <= height:
-                i = torch.randint(0, height - h + 1, size=(1,)).item()
-                j = torch.randint(0, width - w + 1, size=(1,)).item()
+                i = torch.randint(0, height - h + 1, size=(1,)).detach().cpu().numpy().item()
+                j = torch.randint(0, width - w + 1, size=(1,)).detach().cpu().numpy().item()
                 break
         else:
             # Fallback to central crop
