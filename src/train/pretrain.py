@@ -45,6 +45,8 @@ if __name__ == '__main__':
     parser.add_argument('--labelled_only', required=False, type=int, help='Whether to use only examples with labels')
     parser.add_argument('--exclude_idx', required=False, type=int, help='Index of transform to exclude')
     parser.add_argument('--square_roi', required=False, type=int, help='1 if images cropped and resized to square; 0 otherwise')
+    parser.add_argument('--train_metric_freq', required=False, type=int, default=100, help='Frequency for logging pretraining metrics (in steps)')
+    parser.add_argument('--deterministic', action='store_true', help='If provided, sets the `deterministic` flag in Trainer')
 
     args = vars(parser.parse_args())
     print(f"Args: {json.dumps(args, indent=2)}")
@@ -177,9 +179,10 @@ if __name__ == '__main__':
             weight_decay=cfg['pretrain']['weight_decay'],
             warmup_epochs=cfg['pretrain']['warmup_epochs'],
             scheduler_epochs=epochs,
-            world_size=world_size
+            world_size=world_size,
+            train_metric_freq=args['train_metric_freq']
         )
-        #model.summary()
+        model.summary()
 
         # Set checkpoint/log dir and save the run config as a JSON file
         date = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -216,7 +219,8 @@ if __name__ == '__main__':
         logger=loggers,
         default_root_dir=checkpoint_dir,
         callbacks=callbacks,
-        log_every_n_steps=args['log_interval']
+        log_every_n_steps=args['log_interval'],
+        deterministic=args['deterministic']
         #profiler='advanced'
     )
     #trainer.fit(model, train_loader, val_loader, ckpt_path=load_ckpt_path)

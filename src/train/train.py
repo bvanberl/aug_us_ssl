@@ -45,6 +45,7 @@ if __name__ == '__main__':
     parser.add_argument('--checkpoint_path', required=False, type=str, help='Checkpoint to resume from')
     parser.add_argument('--labelled_only', required=False, type=int, help='Whether to use only examples with labels')
     parser.add_argument('--label', required=False, type=str, help='Name of label column')
+    parser.add_argument('--deterministic', action='store_true', help='If provided, sets the `deterministic` flag in Trainer')
     args = vars(parser.parse_args())
     print(f"Args: {json.dumps(args, indent=2)}")
 
@@ -195,7 +196,8 @@ if __name__ == '__main__':
         logger=loggers,
         default_root_dir=checkpoint_dir,
         callbacks=callbacks,
-        log_every_n_steps=args['log_interval']
+        log_every_n_steps=args['log_interval'],
+        deterministic=args['deterministic']
     )
     trainer.fit(model, train_loader, val_loader, ckpt_path=load_ckpt_path)
 

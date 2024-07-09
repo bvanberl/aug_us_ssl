@@ -152,5 +152,5 @@ class JointEmbeddingModel(pl.LightningModule):
         return [optimizer], [{"scheduler": scheduler, "interval": "step"}]
 
     def summary(self):
-        torchsummary.summary(self.extractor, input_size=self.input_shape)
-        torchsummary.summary(self.projector, input_size=(self.h_dim,))
+        torchsummary.summary(self.extractor.cuda(), input_size=self.input_shape)
+        torchsummary.summary(self.projector.cuda(), input_size=(self.h_dim,))
