@@ -234,6 +234,7 @@ def get_august_refined_augmentations(
         reflect_prob: float = 0.5,
         shift_rotate_prob: float = 0.5,
         crop_prob: float = 1.0,
+        blur_prob: float = 0.5,
         resize: bool = True,
         mean_pixel_val: List[float] = None,
         std_pixel_val: List[float] = None,
@@ -271,19 +272,10 @@ def get_august_refined_augmentations(
             [BrightnessContrastChange(min_brightness=0.6, max_brightness=1.4, min_contrast=0.6, max_contrast=1.4)],
             p=brightness_contrast_prob
         ),
-        # v2.RandomApply(
-        #     [GaussianNoise(min_sigma=0.5, max_sigma=2.5)],
-        #     p=gaussian_prob
-        # ),
-        # v2.RandomApply(
-        #     [SaltAndPepperNoise(min_salt_frac=0.001, max_salt_frac=0.005, min_pepper_frac=0.001,
-        #                                             max_pepper_frac=0.005)],
-        #     p=sp_prob
-        # ),
         v2.RandomApply([HorizontalReflection()], p=reflect_prob),
         v2.RandomApply([AffineKeypoint(max_shift=0.2, max_rotation=45, min_scale=1.0, max_scale=1.0)], p=shift_rotate_prob),
-        v2.RandomApply([RandomResizedCropKeypoint((height, width), scale=(0.08, 1.), antialias=True)]),
-        #v2.RandomApply([v2.GaussianBlur(gauss_kernel)], p=0.5),
+        v2.RandomApply([RandomResizedCropKeypoint((height, width), scale=(0.08, 1.), antialias=True)], p=crop_prob),
+        v2.RandomApply([v2.GaussianBlur(gauss_kernel)], p=blur_prob),
         v2.ToDtype(torch.float32, scale=True),
         get_normalize_transform(mean_pixel_val, std_pixel_val)
     ]

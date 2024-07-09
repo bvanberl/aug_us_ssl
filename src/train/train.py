@@ -8,7 +8,7 @@ import yaml
 import torchvision
 from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.loggers import WandbLogger, TensorBoardLogger
-from pytorch_lightning.callbacks import LearningRateMonitor, TQDMProgressBar
+from pytorch_lightning.callbacks import LearningRateMonitor, TQDMProgressBar, ModelCheckpoint
 
 from src.models.classifier import Classifier
 from src.models.joint_embedding import JointEmbeddingModel
@@ -40,12 +40,14 @@ if __name__ == '__main__':
     parser.add_argument('--augment_pipeline', required=False, type=str, default=None, help='Augmentation pipeline')
     parser.add_argument('--num_train_workers', required=False, type=int, default=0, help='Number of workers for loading train set')
     parser.add_argument('--num_val_workers', required=False, type=int, default=0, help='Number of workers for loading val set')
+    parser.add_argument('--num_test_workers', required=False, type=int, default=0, help='Number of workers for loading test set')
     parser.add_argument('--seed', required=False, type=int, help='Random seed')
     parser.add_argument('--checkpoint_dir', required=False, type=str, help='Directory in which to save checkpoints')
     parser.add_argument('--checkpoint_path', required=False, type=str, help='Checkpoint to resume from')
     parser.add_argument('--labelled_only', required=False, type=int, help='Whether to use only examples with labels')
     parser.add_argument('--label', required=False, type=str, help='Name of label column')
     parser.add_argument('--deterministic', action='store_true', help='If provided, sets the `deterministic` flag in Trainer')
+    parser.add_argument('--test', action='store_true', help='If provided, performs test set evaluation')
     args = vars(parser.parse_args())
     print(f"Args: {json.dumps(args, indent=2)}")
 
@@ -55,6 +57,7 @@ if __name__ == '__main__':
     seed = args['seed'] if args['seed'] else cfg['train']['seed']
     n_train_workers = args["num_train_workers"]
     n_val_workers = args["num_val_workers"]
+    n_test_workers = args["num_val_workers"]
     seed_everything(seed, n_train_workers > 0)
 
     # Update config with values from command-line args
@@ -84,7 +87,7 @@ if __name__ == '__main__':
         augment_pipeline = cfg['train']['augment_pipeline']
 
     # Create training and validation data loaders
-    train_loader, val_loader = load_data_for_train(
+    train_loader, val_loader, test_loader = load_data_for_train(
         image_dir,
         label_name,
         width,
@@ -93,7 +96,8 @@ if __name__ == '__main__':
         batch_size,
         augment_pipeline=augment_pipeline,
         n_train_workers=n_train_workers,
-        n_val_workers=n_val_workers
+        n_val_workers=n_val_workers,
+        n_test_workers=n_test_workers
     )
 
     # Finalize run configuration
@@ -160,6 +164,7 @@ if __name__ == '__main__':
             world_size
         )
         model.summary()
+        print("\n\n\n")
 
         # Set checkpoint/log dir and save the run config as a JSON file
         date = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -182,9 +187,11 @@ if __name__ == '__main__':
         loggers.append(WandbLogger(log_model="all"))
 
     # Create callbacks
+    ckpt_callback = ModelCheckpoint(monitor='val/loss', dirpath=checkpoint_dir, filename='best-{epoch}-{step}', mode='min')
     callbacks = [
         LearningRateMonitor(logging_interval='step'),
-        TQDMProgressBar(refresh_rate=100)
+        TQDMProgressBar(refresh_rate=100),
+        ckpt_callback
     ]
 
     # Train the model
@@ -200,6 +207,13 @@ if __name__ == '__main__':
         deterministic=args['deterministic']
     )
     trainer.fit(model, train_loader, val_loader, ckpt_path=load_ckpt_path)
+    
+    # Restore the model with lowest validation set loss and evaluate it on the test set
+    if args['test']:
+        model_path = ckpt_callback.best_model_path
+        print(f"Best model saved at: {model_path}")
+        best_model = Classifier.load_from_checkpoint(model_path)
+        trainer.test(best_model, test_loader)
 
     if use_wandb:
         wandb.finish()

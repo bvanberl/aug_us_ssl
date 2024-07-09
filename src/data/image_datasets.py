@@ -438,9 +438,10 @@ def load_data_for_train(
         augment_pipeline: str = "august",
         n_train_workers: int = 0,
         n_val_workers: int = 0,
+        n_test_workers: int = 0,
         resize: bool = True,
         **preprocess_kwargs
-) -> (DataLoader, pd.DataFrame):
+) -> (DataLoader, DataLoader, DataLoader):
     """
     Retrieve data, data splits, and returns an iterable preprocessed dataset for pretraining
     :param cfg: The config.yaml file dictionary
@@ -458,7 +459,7 @@ def load_data_for_train(
     :param width: Desired width of images
     :param height: Desired height of images
     :param preprocess_kwargs: Keyword arguments for preprocessing
-    :return: dataset for pretraining
+    :return: datasets for training
     """
 
     # Load data for training
@@ -485,6 +486,18 @@ def load_data_for_train(
     val_clips_df = val_clips_df.loc[val_clips_df[label_name] != -1]
     val_frames_df = val_frames_df.loc[val_frames_df[label_name] != -1]
     print("Validation clips:\n", val_clips_df.describe())
+    
+    test_frames_path = os.path.join(splits_dir, f'test_set_frames.csv')
+    test_clips_path = os.path.join(splits_dir, 'test_set_clips.csv')
+    if os.path.exists(test_frames_path) and os.path.exists(test_clips_path):
+        test_frames_df = pd.read_csv(test_frames_path)
+        test_clips_df = pd.read_csv(test_clips_path)
+    else:
+        test_frames_df = pd.DataFrame()
+        test_clips_df = pd.DataFrame()
+    test_clips_df = test_clips_df.loc[test_clips_df[label_name] != -1]
+    test_frames_df = test_frames_df.loc[test_frames_df[label_name] != -1]
+    print("Test clips:\n", test_clips_df.describe())
 
     train_loader = prepare_train_dataloader(
         image_dir,
@@ -519,5 +532,24 @@ def load_data_for_train(
         )
     else:
         val_loader = None
+    
+    if test_frames_df.shape[0] > 0:
+        test_loader = prepare_train_dataloader(
+            image_dir,
+            label_name,
+            test_frames_df,
+            batch_size,
+            width,
+            height,
+            augment_pipeline="none",
+            shuffle=False,
+            channels=3,
+            n_workers=n_test_workers,
+            drop_last=False,
+            resize=resize,
+            **preprocess_kwargs
+        )
+    else:
+        test_loader = None
 
-    return train_loader, val_loader
+    return train_loader, val_loader, test_loader

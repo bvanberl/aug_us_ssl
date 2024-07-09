@@ -94,6 +94,7 @@ class Classifier(pl.LightningModule):
         ])
         self.train_metrics = metrics.clone(prefix='train/')
         self.val_metrics = metrics.clone(prefix='val/')
+        self.test_metrics = metrics.clone(prefix='test/')
 
     def forward(self, x: Tensor) -> Tensor:
 
@@ -131,6 +132,7 @@ class Classifier(pl.LightningModule):
         loss = self.loss(y_hat, y)
 
         # Log the loss and metrics
+        self.log('val/loss', loss, on_epoch=True, prog_bar=True, sync_dist=self.distributed)
         self.val_metrics(y_hat, y)
         return loss
     
@@ -138,6 +140,23 @@ class Classifier(pl.LightningModule):
 
         self.log_dict(self.val_metrics.compute(), on_epoch=True, prog_bar=True, sync_dist=self.distributed)
         self.val_metrics.reset()
+        
+    def test_step(self, batch, batch_idx):
+
+        # Forward pass
+        x, y = batch
+        y_hat = self.forward(x)
+        loss = self.loss(y_hat, y)
+
+        # Log the loss and metrics
+        self.log('test/loss', loss, on_epoch=True, prog_bar=True, sync_dist=self.distributed)
+        self.test_metrics(y_hat, y)
+        return loss
+    
+    def on_test_epoch_end(self):
+
+        self.log_dict(self.test_metrics.compute(), on_epoch=True, prog_bar=True, sync_dist=self.distributed)
+        self.test_metrics.reset()
 
     def configure_optimizers(self):
         param_groups = [dict(params=self.head.parameters(), lr=self.lr_head)]
