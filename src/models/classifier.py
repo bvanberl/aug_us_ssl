@@ -89,6 +89,7 @@ class Classifier(pl.LightningModule):
             tm.Accuracy(task, num_classes=n_classes),
             tm.Precision(task, num_classes=n_classes, average='macro'),
             tm.Recall(task, num_classes=n_classes, average='macro'),
+            tm.Specificity(task, num_classes=n_classes, average='macro'),
             tm.F1Score(task, num_classes=n_classes, average='macro'),
             tm.AUROC(task, num_classes=n_classes),
         ])

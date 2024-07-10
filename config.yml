@@ -35,7 +35,7 @@ pretrain:
     barlow_twins:
       lambda_: 0.005
     vicreg:
-      lambda_: 25.0
+      lambda_: 8.0
       mu: 25.0
       nu: 1.0
 
