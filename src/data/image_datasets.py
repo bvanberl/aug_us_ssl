@@ -8,6 +8,7 @@ import numpy as np
 from torch.utils.data import Dataset, DataLoader
 from torchvision.transforms.v2 import Compose
 from torchvision.io import read_image, ImageReadMode
+from sklearn.model_selection import GroupKFold, StratifiedGroupKFold
 
 from src.constants import Probe
 from src.augmentations.pipelines import *
@@ -440,6 +441,7 @@ def load_data_for_train(
         n_val_workers: int = 0,
         n_test_workers: int = 0,
         resize: bool = True,
+        train_clips: pd.DataFrame = None,
         **preprocess_kwargs
 ) -> (DataLoader, DataLoader, DataLoader):
     """
@@ -458,6 +460,7 @@ def load_data_for_train(
     :param max_pixel_val: Maximum value for pixel intensity
     :param width: Desired width of images
     :param height: Desired height of images
+    :param train_clips: Subset of clips to force as the training set
     :param preprocess_kwargs: Keyword arguments for preprocessing
     :return: datasets for training
     """
@@ -471,8 +474,13 @@ def load_data_for_train(
     else:
         train_frames_df = pd.DataFrame()
         train_clips_df = pd.DataFrame()
-    train_clips_df = train_clips_df.loc[train_clips_df[label_name] != -1]
-    train_frames_df = train_frames_df.loc[train_frames_df[label_name] != -1]
+    if train_clips is None:
+        train_clips_df = train_clips_df.loc[train_clips_df[label_name] != -1]
+        train_frames_df = train_frames_df.loc[train_frames_df[label_name] != -1]
+    else:
+        train_clips_df = train_clips
+        train_frames_df = train_frames_df.loc[train_frames_df['id'].isin(train_clips['id'])]
+
     print("Training clips:\n", train_clips_df.describe())
 
     val_frames_path = os.path.join(splits_dir, f'val_set_frames.csv')
@@ -553,3 +561,51 @@ def load_data_for_train(
         test_loader = None
 
     return train_loader, val_loader, test_loader
+
+
+def split_for_label_efficiency(
+        splits_dir: str,
+        n_splits: int,
+        label_col: str,
+        seed: int = 0,
+        stratify_by_label: bool = False,
+        group_col: str = None
+) -> List[pd.DataFrame]:
+    """
+    Splits the training set into `n_splits`, to be used for label efficiency
+    experiments.
+    :param splits_dir: Directory where train/validation/test CSVs are located
+    :param n_splits: Number of subsets to split the training set into
+    :param label_col: Column name of the label in the training set CSV
+    :param seed: Random state for reproducible splits
+    :param stratify_by_label: If True, stratifies the subsets by label value
+    :param group_col: Column name of the attribute to split by. If not None, ensures
+        training subsets are disjoint with respect to `group_col`.
+    """
+
+    train_clips_df = pd.read_csv(os.path.join(splits_dir, 'train_set_clips.csv'))
+    train_clips_df = train_clips_df.loc[train_clips_df[label_col] != -1].reset_index()
+
+    # Define the splitter
+    train_sets = []
+    if stratify_by_label:
+        group_kfold = StratifiedGroupKFold(n_splits=n_splits, shuffle=True, random_state=seed)
+    else:
+        group_kfold = GroupKFold(n_splits=n_splits)
+    groups = train_clips_df[group_col]
+
+    # Split by group into n_splits divisions
+    split_indices = group_kfold.split(train_clips_df, train_clips_df[label_col], groups=groups)
+    for i, (_, fold_index) in enumerate(split_indices):
+
+        # Create a training set from all images in the current group division
+        train_clips = train_clips_df.loc[fold_index]
+        if train_clips[label_col].nunique() > 1:
+            train_sets.append(train_clips)
+            print(f"Train set {i} contains {train_clips.shape[0]} clips from "
+                  f"{train_clips[group_col].nunique()} patients. Class distribution is "
+                  f"{train_clips[label_col].value_counts(normalize=True).to_dict()}")
+        else:
+            raise ValueError(f"Only one label found in the {i}'th training subset.")
+
+    return train_sets

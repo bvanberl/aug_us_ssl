@@ -3,7 +3,9 @@ import datetime
 import os
 import time
 import json
+import gc
 
+import pandas as pd
 import yaml
 import torchvision
 from pytorch_lightning import Trainer, seed_everything
@@ -13,44 +15,16 @@ from pytorch_lightning.callbacks import LearningRateMonitor, TQDMProgressBar, Mo
 from src.models.classifier import Classifier
 from src.models.joint_embedding import JointEmbeddingModel
 from src.models.extractors import get_extractor
-from src.data.image_datasets import load_data_for_train
+from src.data.image_datasets import load_data_for_train, split_for_label_efficiency
 from src.train.utils import *
 
 torchvision.disable_beta_transforms_warning()
 
-cfg = yaml.full_load(open(os.getcwd() + "/config.yml", 'r'))
-if os.path.exists("./wandb.yml"):
-    wandb_cfg = yaml.full_load(open(os.getcwd() + "/wandb.yml", 'r'))
-else:
-    wandb_cfg = {'MODE': 'disabled', 'RESUME_ID': None}
-
-if __name__ == '__main__':
-
-    parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
-    parser.add_argument('--linear', required=False, type=int, help='0 for fine-tuning, 1 for linear')
-    parser.add_argument('--extractor_weights', required=False, type=str, help='Path to saved joint embedding model')
-    parser.add_argument('--image_dir', required=False, default='', type=str, help='Root directory containing images')
-    parser.add_argument('--splits_dir', required=False, default='', type=str,
-                        help='Root directory containing splits information')
-    parser.add_argument('--nodes', default=1, type=int, help='Number of nodes')
-    parser.add_argument('--gpus_per_node', default=1, type=int, help='Number of GPUs per node')
-    parser.add_argument('--log_interval', default=1, type=int, help='Number of steps after which to log')
-    parser.add_argument('--epochs', required=False, type=int, help='Number of epochs')
-    parser.add_argument('--batch_size', required=False, type=int, help='Batch size')
-    parser.add_argument('--augment_pipeline', required=False, type=str, default=None, help='Augmentation pipeline')
-    parser.add_argument('--num_train_workers', required=False, type=int, default=0, help='Number of workers for loading train set')
-    parser.add_argument('--num_val_workers', required=False, type=int, default=0, help='Number of workers for loading val set')
-    parser.add_argument('--num_test_workers', required=False, type=int, default=0, help='Number of workers for loading test set')
-    parser.add_argument('--seed', required=False, type=int, help='Random seed')
-    parser.add_argument('--checkpoint_dir', required=False, type=str, help='Directory in which to save checkpoints')
-    parser.add_argument('--checkpoint_path', required=False, type=str, help='Checkpoint to resume from')
-    parser.add_argument('--labelled_only', required=False, type=int, help='Whether to use only examples with labels')
-    parser.add_argument('--label', required=False, type=str, help='Name of label column')
-    parser.add_argument('--deterministic', action='store_true', help='If provided, sets the `deterministic` flag in Trainer')
-    parser.add_argument('--test', action='store_true', help='If provided, performs test set evaluation')
-    args = vars(parser.parse_args())
-    print(f"Args: {json.dumps(args, indent=2)}")
-
+def train(
+        cfg: dict,
+        args: dict,
+        train_clips: pd.DataFrame = None
+):
     num_nodes = args['nodes']
     num_gpus = args['gpus_per_node']
     world_size = num_nodes * num_gpus
@@ -58,17 +32,6 @@ if __name__ == '__main__':
     n_train_workers = args["num_train_workers"]
     n_val_workers = args["num_val_workers"]
     n_test_workers = args["num_val_workers"]
-    seed_everything(seed, n_train_workers > 0)
-
-    # Update config with values from command-line args
-    for k in cfg['data']:
-        if k in args and args[k] is not None:
-            cfg['data'][k] = args[k]
-    for k in cfg['train']:
-        if k in args and args[k] is not None:
-            cfg['train'][k] = args[k]
-    print(f"Data config after parsing args:\n {json.dumps(cfg['data'], indent=2)}")
-    print(f"Train config after parsing args:\n {json.dumps(cfg['train'], indent=2)}")
 
     # Specify image directory, splits CSV directory, image shape, batch size
     image_dir = args['image_dir'] if args['image_dir'] else cfg["paths"]["images"]
@@ -97,7 +60,8 @@ if __name__ == '__main__':
         augment_pipeline=augment_pipeline,
         n_train_workers=n_train_workers,
         n_val_workers=n_val_workers,
-        n_test_workers=n_test_workers
+        n_test_workers=n_test_workers,
+        train_clips=train_clips
     )
 
     # Finalize run configuration
@@ -187,7 +151,8 @@ if __name__ == '__main__':
         loggers.append(WandbLogger(log_model="all"))
 
     # Create callbacks
-    ckpt_callback = ModelCheckpoint(monitor='val/loss', dirpath=checkpoint_dir, filename='best-{epoch}-{step}', mode='min')
+    ckpt_callback = ModelCheckpoint(monitor='val/loss', dirpath=checkpoint_dir, filename='best-{epoch}-{step}',
+                                    mode='min')
     callbacks = [
         LearningRateMonitor(logging_interval='step'),
         TQDMProgressBar(refresh_rate=100),
@@ -207,13 +172,110 @@ if __name__ == '__main__':
         deterministic=args['deterministic']
     )
     trainer.fit(model, train_loader, val_loader, ckpt_path=load_ckpt_path)
-    
+
     # Restore the model with lowest validation set loss and evaluate it on the test set
+    test_metrics = {}
     if args['test']:
         model_path = ckpt_callback.best_model_path
         print(f"Best model saved at: {model_path}")
         best_model = Classifier.load_from_checkpoint(model_path)
-        trainer.test(best_model, test_loader)
+        test_metrics = trainer.test(best_model, test_loader)[0]
 
     if use_wandb:
         wandb.finish()
+
+    return test_metrics
+
+
+def label_efficiency_experiment(cfg: dict, args: dict):
+    """
+    Splits training set into N chunks by patient. Trains a model on each
+    subset and records test metrics.
+    :param cfg: The config.yaml file dictionary
+    :param args: Command-line arguments
+    """
+
+    n_splits = cfg['train']['n_splits_label_eff']
+
+    train_dfs = split_for_label_efficiency(
+        args['splits_dir'],
+        n_splits,
+        args['label'],
+        seed=args['seed'],
+        stratify_by_label=True,
+        group_col='patient_id'
+    )
+
+    base_checkpoint_dir = args['checkpoint_dir']
+    metrics_df = pd.DataFrame()
+
+    for i in range(n_splits):
+        print(f"Trial {i + 1} / {n_splits}.\n\n")
+
+        args['checkpoint_dir'] = os.path.join(base_checkpoint_dir, f"split{i}")
+        test_metrics = train(cfg, args, train_dfs[i])
+
+        if i == 0:
+            metrics_df = pd.DataFrame(test_metrics)
+        else:
+            new_row = pd.DataFrame([metrics_df])
+            metrics_df = pd.concat([metrics_df, new_row], ignore_index=True)
+        gc.collect()
+
+    metrics_df.to_csv(os.path.join(base_checkpoint_dir, "label_efficiency_results.csv"), index=False)
+
+
+if __name__ == '__main__':
+
+    parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
+    parser.add_argument('--linear', required=False, type=int, help='0 for fine-tuning, 1 for linear')
+    parser.add_argument('--extractor_weights', required=False, type=str, help='Path to saved joint embedding model')
+    parser.add_argument('--image_dir', required=False, default='', type=str, help='Root directory containing images')
+    parser.add_argument('--splits_dir', required=False, default='', type=str,
+                        help='Root directory containing splits information')
+    parser.add_argument('--nodes', default=1, type=int, help='Number of nodes')
+    parser.add_argument('--gpus_per_node', default=1, type=int, help='Number of GPUs per node')
+    parser.add_argument('--log_interval', default=1, type=int, help='Number of steps after which to log')
+    parser.add_argument('--epochs', required=False, type=int, help='Number of epochs')
+    parser.add_argument('--batch_size', required=False, type=int, help='Batch size')
+    parser.add_argument('--augment_pipeline', required=False, type=str, default=None, help='Augmentation pipeline')
+    parser.add_argument('--num_train_workers', required=False, type=int, default=0, help='Number of workers for loading train set')
+    parser.add_argument('--num_val_workers', required=False, type=int, default=0, help='Number of workers for loading val set')
+    parser.add_argument('--num_test_workers', required=False, type=int, default=0, help='Number of workers for loading test set')
+    parser.add_argument('--seed', required=False, type=int, help='Random seed')
+    parser.add_argument('--checkpoint_dir', required=False, type=str, help='Directory in which to save checkpoints')
+    parser.add_argument('--checkpoint_path', required=False, type=str, help='Checkpoint to resume from')
+    parser.add_argument('--labelled_only', required=False, type=int, help='Whether to use only examples with labels')
+    parser.add_argument('--label', required=False, type=str, help='Name of label column')
+    parser.add_argument('--deterministic', action='store_true', help='If provided, sets the `deterministic` flag in Trainer')
+    parser.add_argument('--test', action='store_true', help='If provided, performs test set evaluation')
+    parser.add_argument('--experiment_type', type=str, default='single_train', required=False, help='Type of training experiment')
+    args = vars(parser.parse_args())
+    print(f"Args: {json.dumps(args, indent=2)}")
+
+    cfg = yaml.full_load(open(os.getcwd() + "/config.yml", 'r'))
+    if os.path.exists("./wandb.yml"):
+        wandb_cfg = yaml.full_load(open(os.getcwd() + "/wandb.yml", 'r'))
+    else:
+        wandb_cfg = {'MODE': 'disabled', 'RESUME_ID': None}
+
+    seed = args['seed'] if args['seed'] else cfg['train']['seed']
+    seed_everything(seed, args["num_train_workers"] > 0)
+
+    # Update config with values from command-line args
+    for k in cfg['data']:
+        if k in args and args[k] is not None:
+            cfg['data'][k] = args[k]
+    for k in cfg['train']:
+        if k in args and args[k] is not None:
+            cfg['train'][k] = args[k]
+    print(f"Data config after parsing args:\n {json.dumps(cfg['data'], indent=2)}")
+    print(f"Train config after parsing args:\n {json.dumps(cfg['train'], indent=2)}")
+
+    if args['experiment_type'] == 'single_train':
+        test_metrics = train(cfg, args)
+        print(f"Test metrics: {json.dumps(test_metrics, indent=2)}")
+    elif args['experiment_type'] == 'label_efficiency':
+        label_efficiency_experiment(cfg, args)
+    else:
+        raise ValueError(f"Unknown experiment type: {args['experiment_type']}")
