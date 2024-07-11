@@ -216,9 +216,9 @@ def label_efficiency_experiment(cfg: dict, args: dict):
         test_metrics = train(cfg, args, train_dfs[i])
 
         if i == 0:
-            metrics_df = pd.DataFrame(test_metrics)
+            metrics_df = pd.DataFrame([test_metrics])
         else:
-            new_row = pd.DataFrame([metrics_df])
+            new_row = pd.DataFrame([test_metrics])
             metrics_df = pd.concat([metrics_df, new_row], ignore_index=True)
         gc.collect()
 
