@@ -563,6 +563,56 @@ def load_data_for_train(
     return train_loader, val_loader, test_loader
 
 
+def load_data_for_test(
+        image_dir: str,
+        label_name: str,
+        width: int,
+        height: int,
+        splits_dir: str,
+        batch_size: int,
+        n_test_workers: int = 0,
+        resize: bool = True,
+        **preprocess_kwargs
+) -> DataLoader:
+    """
+    Retrieve data, data splits, and returns an iterable preprocessed dataset for testing
+    :param cfg: The config.yaml file dictionary
+    :param batch_size: Batch size for dataset
+    :param redownload_data: Flag indicating whether the dataset artifact should be redownloaded
+    :param channels: Number of channels
+    :param max_pixel_val: Maximum value for pixel intensity
+    :param width: Desired width of images
+    :param height: Desired height of images
+    :param preprocess_kwargs: Keyword arguments for preprocessing
+    :return: datasets for training
+    """
+
+    test_frames_path = os.path.join(splits_dir, f'test_set_frames.csv')
+    test_clips_path = os.path.join(splits_dir, 'test_set_clips.csv')
+    test_frames_df = pd.read_csv(test_frames_path)
+    test_clips_df = pd.read_csv(test_clips_path)
+    test_clips_df = test_clips_df.loc[test_clips_df[label_name] != -1]
+    test_frames_df = test_frames_df.loc[test_frames_df[label_name] != -1]
+    print("Test clips:\n", test_clips_df.describe())
+
+    test_loader = prepare_train_dataloader(
+        image_dir,
+        label_name,
+        test_frames_df,
+        batch_size,
+        width,
+        height,
+        augment_pipeline="none",
+        shuffle=False,
+        channels=3,
+        n_workers=n_test_workers,
+        drop_last=False,
+        resize=resize,
+        **preprocess_kwargs
+    )
+    return test_loader
+
+
 def split_for_label_efficiency(
         splits_dir: str,
         n_splits: int,

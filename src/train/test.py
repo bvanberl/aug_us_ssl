@@ -13,9 +13,7 @@ from pytorch_lightning.loggers import WandbLogger, TensorBoardLogger
 from pytorch_lightning.callbacks import LearningRateMonitor, TQDMProgressBar, ModelCheckpoint
 
 from src.models.classifier import Classifier
-from src.models.joint_embedding import JointEmbeddingModel
-from src.models.extractors import get_extractor
-from src.data.image_datasets import load_data_for_train, split_for_label_efficiency
+from src.data.image_datasets import load_data_for_test
 from src.train.utils import *
 
 torchvision.disable_beta_transforms_warning()
@@ -31,7 +29,7 @@ def train(
     seed = args['seed'] if args['seed'] else cfg['train']['seed']
     n_train_workers = args["num_train_workers"]
     n_val_workers = args["num_val_workers"]
-    n_test_workers = args["num_test_workers"]
+    n_test_workers = args["num_val_workers"]
 
     # Specify image directory, splits CSV directory, image shape, batch size
     image_dir = args['image_dir'] if args['image_dir'] else cfg["paths"]["images"]
@@ -229,28 +227,16 @@ def label_efficiency_experiment(cfg: dict, args: dict):
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
-    parser.add_argument('--linear', required=False, type=int, help='0 for fine-tuning, 1 for linear')
-    parser.add_argument('--extractor_weights', required=False, type=str, help='Path to saved joint embedding model')
+    parser.add_argument('--checkpoint_path', required=False, type=str, help='Path to checkpointed classifier')
     parser.add_argument('--image_dir', required=False, default='', type=str, help='Root directory containing images')
     parser.add_argument('--splits_dir', required=False, default='', type=str,
                         help='Root directory containing splits information')
     parser.add_argument('--nodes', default=1, type=int, help='Number of nodes')
     parser.add_argument('--gpus_per_node', default=1, type=int, help='Number of GPUs per node')
-    parser.add_argument('--log_interval', default=1, type=int, help='Number of steps after which to log')
-    parser.add_argument('--epochs', required=False, type=int, help='Number of epochs')
     parser.add_argument('--batch_size', required=False, type=int, help='Batch size')
-    parser.add_argument('--augment_pipeline', required=False, type=str, default=None, help='Augmentation pipeline')
-    parser.add_argument('--num_train_workers', required=False, type=int, default=0, help='Number of workers for loading train set')
-    parser.add_argument('--num_val_workers', required=False, type=int, default=0, help='Number of workers for loading val set')
     parser.add_argument('--num_test_workers', required=False, type=int, default=0, help='Number of workers for loading test set')
     parser.add_argument('--seed', required=False, type=int, help='Random seed')
-    parser.add_argument('--checkpoint_dir', required=False, type=str, help='Directory in which to save checkpoints')
-    parser.add_argument('--checkpoint_path', required=False, type=str, help='Checkpoint to resume from')
-    parser.add_argument('--labelled_only', required=False, type=int, help='Whether to use only examples with labels')
     parser.add_argument('--label', required=False, type=str, help='Name of label column')
-    parser.add_argument('--deterministic', action='store_true', help='If provided, sets the `deterministic` flag in Trainer')
-    parser.add_argument('--test', action='store_true', help='If provided, performs test set evaluation')
-    parser.add_argument('--experiment_type', type=str, default='single_train', required=False, help='Type of training experiment')
     args = vars(parser.parse_args())
     print(f"Args: {json.dumps(args, indent=2)}")
 
@@ -261,22 +247,37 @@ if __name__ == '__main__':
         wandb_cfg = {'MODE': 'disabled', 'RESUME_ID': None}
 
     seed = args['seed'] if args['seed'] else cfg['train']['seed']
-    seed_everything(seed, args["num_train_workers"] > 0)
+    seed_everything(seed, args["num_test_workers"] > 0)
 
-    # Update config with values from command-line args
-    for k in cfg['data']:
-        if k in args and args[k] is not None:
-            cfg['data'][k] = args[k]
-    for k in cfg['train']:
-        if k in args and args[k] is not None:
-            cfg['train'][k] = args[k]
-    print(f"Data config after parsing args:\n {json.dumps(cfg['data'], indent=2)}")
-    print(f"Train config after parsing args:\n {json.dumps(cfg['train'], indent=2)}")
+    image_dir = args['image_dir'] if args['image_dir'] else cfg["paths"]["images"]
+    splits_dir = args['splits_dir'] if args['splits_dir'] else cfg["paths"]["splits"]
+    height = cfg['data']['height']
+    width = cfg['data']['width']
+    channels = 3
+    img_dim = (channels, height, width)
+    batch_size = args['batch_size']
+    label_name = args['label']
+    n_test_workers = args["num_test_workers"]
+    num_nodes = args['nodes']
+    num_gpus = args['gpus_per_node']
 
-    if args['experiment_type'] == 'single_train':
-        test_metrics = train(cfg, args)
-        print(f"Test metrics: {json.dumps(test_metrics, indent=2)}")
-    elif args['experiment_type'] == 'label_efficiency':
-        label_efficiency_experiment(cfg, args)
-    else:
-        raise ValueError(f"Unknown experiment type: {args['experiment_type']}")
+    test_loader = load_data_for_test(
+        image_dir,
+        label_name,
+        width,
+        height,
+        splits_dir,
+        batch_size,
+        n_test_workers=n_test_workers
+    )
+
+    trainer = Trainer(
+        accelerator="gpu",
+        devices=num_gpus,
+        num_nodes=num_nodes
+    )
+
+    model = Classifier.load_from_checkpoint(args['checkpoint_path'])
+    test_metrics = trainer.test(model, test_loader)[0]
+
+    print(test_metrics)
