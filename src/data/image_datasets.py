@@ -131,6 +131,7 @@ def get_augmentation_transforms(
         resize: bool = True,
         exclude_idx: int = -1,
         square_roi: bool = True,
+        prime: bool = False,
         **augment_kwargs
 ) -> Compose:
     """Get augmentation transformation pipelines
@@ -144,7 +145,7 @@ def get_augmentation_transforms(
     """
     pipeline = pipeline.lower()
     if pipeline == "byol_original":
-        return get_original_byol_augmentations(height, width, resize=resize, exclude_idx=exclude_idx)
+        return get_original_byol_augmentations(height, width, resize=resize, exclude_idx=exclude_idx, prime=prime)
     if pipeline == "byol_grayscale":
         return get_grayscale_byol_augmentations(height, width, resize=resize, exclude_idx=exclude_idx)
     elif pipeline == "august_original":
@@ -205,6 +206,7 @@ def prepare_pretrain_dataloader(
         resize=resize,
         exclude_idx=exclude_idx,
         square_roi=square_roi,
+        prime=False
         #**preprocess_kwargs["augmentation"]
     )
     augment2 = get_augmentation_transforms(
@@ -213,7 +215,8 @@ def prepare_pretrain_dataloader(
         width,
         resize=resize,
         exclude_idx=exclude_idx,
-        square_roi=square_roi
+        square_roi=square_roi,
+        prime=True
         # **preprocess_kwargs["augmentation"]
     )
 

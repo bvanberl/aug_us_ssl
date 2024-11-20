@@ -95,7 +95,8 @@ def get_original_byol_augmentations(
         resize: bool = True,
         mean_pixel_val: List[float] = None,
         std_pixel_val: List[float] = None,
-        exclude_idx: int = -1
+        exclude_idx: int = -1,
+        prime: bool = False
 ) -> v2.Compose:
     """
     Applies random data transformations according to the data augmentations
@@ -108,16 +109,25 @@ def get_original_byol_augmentations(
     :param std_pixel_val: Channel-wise standard deviation
     :param exclude_idx: If not -1, the index of a transform to exclude.
                         Used for augmentation ablations.
+    :param prime: If True, uses augmentation set T', as opposed to T (from paper)
     :return: Callable augmentation pipeline
     """
     gauss_kernel = int(23 * height / 224)  # Scale to size of images
+
+    if prime:
+        blur_prob = 0.1
+        solar_prob = 0.2
+    else:
+        blur_prob = 1.0
+        solar_prob = 0.0
+
     transforms = [
         v2.RandomResizedCrop((height, width), scale=(0.08, 1.), antialias=True),
         v2.RandomHorizontalFlip(p=0.5),
         v2.RandomApply([v2.ColorJitter(0.4, 0.4, 0.2, 0.1)], p=0.8),
         v2.RandomGrayscale(p=0.2),
-        v2.RandomApply([v2.GaussianBlur(gauss_kernel)], p=0.5),
-        v2.RandomSolarize(128, p=0.1),
+        v2.RandomApply([v2.GaussianBlur(gauss_kernel)], p=blur_prob),
+        v2.RandomSolarize(128, p=solar_prob),
         v2.ToDtype(torch.float32, scale=True),
         get_normalize_transform(mean_pixel_val, std_pixel_val)
     ]
