@@ -15,7 +15,7 @@ from pytorch_lightning.callbacks import LearningRateMonitor, TQDMProgressBar, Mo
 from src.models.classifier import Classifier
 from src.models.joint_embedding import JointEmbeddingModel
 from src.models.extractors import get_extractor
-from src.data.image_datasets import load_data_for_train, split_for_label_efficiency
+from src.data.image_datasets import load_data_for_train, k_way_train_split
 from src.train.utils import *
 
 torchvision.disable_beta_transforms_warning()
@@ -23,7 +23,10 @@ torchvision.disable_beta_transforms_warning()
 def train(
         cfg: dict,
         args: dict,
-        train_clips: pd.DataFrame = None
+        train_clips: pd.DataFrame = None,
+        test_clips: pd.DataFrame = None,
+        ckpt_metric: Optional[str] = None,
+        perform_test: bool = False
 ):
     num_nodes = args['nodes']
     num_gpus = args['gpus_per_node']
@@ -61,7 +64,8 @@ def train(
         n_train_workers=n_train_workers,
         n_val_workers=n_val_workers,
         n_test_workers=n_test_workers,
-        train_clips=train_clips
+        train_clips=train_clips,
+        k_fold_test_clips=test_clips
     )
 
     # Finalize run configuration
@@ -197,7 +201,7 @@ def label_efficiency_experiment(cfg: dict, args: dict):
 
     n_splits = cfg['train']['n_splits_label_eff']
 
-    train_dfs = split_for_label_efficiency(
+    train_dfs = k_way_train_split(
         args['splits_dir'],
         n_splits,
         args['label'],
@@ -224,6 +228,49 @@ def label_efficiency_experiment(cfg: dict, args: dict):
         torch.cuda.empty_cache()
 
     metrics_df.to_csv(os.path.join(base_checkpoint_dir, "label_efficiency_results.csv"), index=False)
+
+
+def k_fold_cross_validation(cfg: dict, args: dict):
+    """
+    Splits training set by patient into k folds. Performs k-fold cross-
+    validation and records test metrics for each trial.
+    :param cfg: The config.yaml file dictionary
+    :param args: Command-line arguments
+    """
+
+    k = cfg['train']['k_folds']
+
+    train_dfs = k_way_train_split(
+        args['splits_dir'],
+        k,
+        args['label'],
+        seed=args['seed'],
+        stratify_by_label=True,
+        group_col='patient_id'
+    )
+
+    base_checkpoint_dir = args['checkpoint_dir']
+    metrics_df = pd.DataFrame()
+
+    for i in range(k):
+        print(f"k-fold Cross-Validation Trial {i + 1} / {k}.\n\n")
+
+        args['checkpoint_dir'] = os.path.join(base_checkpoint_dir, f"split{i}")
+
+        train_idxs = [j for j in list(range(k)) if j != i]
+        train_df = pd.concat([train_dfs[j] for j in train_idxs])
+        cur_fold_df = train_dfs[i]
+        test_metrics = train(cfg, args, train_df, test_clips=cur_fold_df)
+
+        if i == 0:
+            metrics_df = pd.DataFrame([test_metrics])
+        else:
+            new_row = pd.DataFrame([test_metrics])
+            metrics_df = pd.concat([metrics_df, new_row], ignore_index=True)
+        gc.collect()
+        torch.cuda.empty_cache()
+
+    metrics_df.to_csv(os.path.join(base_checkpoint_dir, "k_fold_cv_results.csv"), index=False)
 
 
 if __name__ == '__main__':

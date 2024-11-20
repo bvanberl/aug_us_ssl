@@ -51,4 +51,5 @@ train:
   extractor: 'mobilenetv3'
   extractor_weights: 'B:/Downloads/epoch=9-step=6020.ckpt'
   augment_pipeline: "supervised"
+  k_folds: 10
   n_splits_label_eff: 20

@@ -314,6 +314,7 @@ def load_data_for_pretrain(
         batch_size: int,
         augment_pipeline: str = "august",
         use_unlabelled: bool = True,
+        use_labelled: bool = True,
         n_train_workers: int = 0,
         n_val_workers: int = 0,
         resize: bool = True,
@@ -344,23 +345,34 @@ def load_data_for_pretrain(
     :return: dataset for pretraining
     """
 
-    # Load data for pretraining
-    labelled_train_frames_path = os.path.join(splits_dir, 'train_set_frames.csv')
-    labelled_train_clips_path = os.path.join(splits_dir, 'train_set_clips.csv')
-    if os.path.exists(labelled_train_frames_path) and os.path.exists(labelled_train_clips_path):
-        labelled_train_frames_df = pd.read_csv(labelled_train_frames_path)
-        labelled_train_clips_df = pd.read_csv(labelled_train_clips_path)
-    else:
-        labelled_train_frames_df = pd.DataFrame()
-        labelled_train_clips_df = pd.DataFrame()
-    unlabelled_frames_path = os.path.join(splits_dir, 'unlabelled_frames.csv')
-    unlabelled_clips_path = os.path.join(splits_dir, 'unlabelled_clips.csv')
-    if os.path.exists(unlabelled_frames_path) and os.path.exists(unlabelled_clips_path):
-        unlabelled_frames_df = pd.read_csv(unlabelled_frames_path)
-        unlabelled_clips_df = pd.read_csv(unlabelled_clips_path)
-    else:
-        unlabelled_frames_df = pd.DataFrame()
-        unlabelled_clips_df = pd.DataFrame()
+    if not use_unlabelled and not use_labelled:
+        raise ValueError("Must set at least one of `use_unlabelled` or `use_labelled` to True")
+
+    # Set up training set for self-supervised pretraining
+    train_frames_df = pd.DataFrame()
+    train_clips_df = pd.DataFrame()
+    if use_unlabelled:
+        unlabelled_frames_path = os.path.join(splits_dir, 'unlabelled_frames.csv')
+        unlabelled_clips_path = os.path.join(splits_dir, 'unlabelled_clips.csv')
+        if os.path.exists(unlabelled_frames_path) and os.path.exists(unlabelled_clips_path):
+            unlabelled_frames_df = pd.read_csv(unlabelled_frames_path)
+            unlabelled_clips_df = pd.read_csv(unlabelled_clips_path)
+        else:
+            raise FileNotFoundError(f'{unlabelled_frames_path} or {unlabelled_clips_path} does not exist')
+        train_frames_df = unlabelled_frames_df
+        train_clips_df = unlabelled_clips_df
+    if use_labelled:
+        labelled_train_frames_path = os.path.join(splits_dir, 'train_set_frames.csv')
+        labelled_train_clips_path = os.path.join(splits_dir, 'train_set_clips.csv')
+        if os.path.exists(labelled_train_frames_path) and os.path.exists(labelled_train_clips_path):
+            labelled_train_frames_df = pd.read_csv(labelled_train_frames_path)
+            labelled_train_clips_df = pd.read_csv(labelled_train_clips_path)
+        else:
+            raise FileNotFoundError(f'{labelled_train_frames_path} or {labelled_train_clips_path} does not exist')
+        train_frames_df = pd.concat([train_frames_df, labelled_train_frames_df])
+        train_clips_df = pd.concat([train_clips_df, labelled_train_clips_df])
+
+    # Set up validation set for self-supervised pretraining
     val_frames_path = os.path.join(splits_dir, 'val_set_frames.csv')
     val_clips_path = os.path.join(splits_dir, 'val_set_clips.csv')
     if os.path.exists(val_frames_path) and os.path.exists(val_clips_path):
@@ -369,13 +381,6 @@ def load_data_for_pretrain(
     else:
         val_frames_df = pd.DataFrame()
         val_clips_df = pd.DataFrame()
-
-    if use_unlabelled:
-        train_frames_df = pd.concat([labelled_train_frames_df, unlabelled_frames_df])
-        train_clips_df = pd.concat([labelled_train_clips_df, unlabelled_clips_df])
-    else:
-        train_frames_df = labelled_train_frames_df
-        train_clips_df = labelled_train_clips_df
 
     # Add clip-wise keypoints and probe types to frame records
     train_frames_df = pd.merge(
@@ -445,6 +450,7 @@ def load_data_for_train(
         n_test_workers: int = 0,
         resize: bool = True,
         train_clips: pd.DataFrame = None,
+        k_fold_test_clips: pd.DataFrame = None,
         **preprocess_kwargs
 ) -> (DataLoader, DataLoader, DataLoader):
     """
@@ -463,29 +469,34 @@ def load_data_for_train(
     :param max_pixel_val: Maximum value for pixel intensity
     :param width: Desired width of images
     :param height: Desired height of images
-    :param train_clips: Subset of clips to force as the training set
+    :param train_clips: Subset of training pool clips to force as the training set
+    :param k_fold_test_clips: Subset of training pool clips to force as the test set.
+                              Use for k-fold cross-validation.
     :param preprocess_kwargs: Keyword arguments for preprocessing
     :return: datasets for training
     """
 
-    # Load data for training
+    # Load training set
     train_frames_path = os.path.join(splits_dir, f'train_set_frames.csv')
     train_clips_path = os.path.join(splits_dir, 'train_set_clips.csv')
     if os.path.exists(train_frames_path) and os.path.exists(train_clips_path):
-        train_frames_df = pd.read_csv(train_frames_path)
-        train_clips_df = pd.read_csv(train_clips_path)
+        train_pool_frames_df = pd.read_csv(train_frames_path)
+        train_pool_clips_df = pd.read_csv(train_clips_path)
     else:
-        train_frames_df = pd.DataFrame()
-        train_clips_df = pd.DataFrame()
+        train_pool_frames_df = pd.DataFrame()
+        train_pool_clips_df = pd.DataFrame()
     if train_clips is None:
-        train_clips_df = train_clips_df.loc[train_clips_df[label_name] != -1]
-        train_frames_df = train_frames_df.loc[train_frames_df[label_name] != -1]
+        train_clips_df = train_pool_clips_df.loc[train_pool_clips_df[label_name] != -1]
+        train_frames_df = train_pool_frames_df.loc[train_pool_frames_df[label_name] != -1]
     else:
+        assert set(train_clips['id'].tolist()).issubset(set(train_pool_clips_df['id'].tolist())), \
+            'Some clips in `train_clips` are not in the training pool.'
         train_clips_df = train_clips
-        train_frames_df = train_frames_df.loc[train_frames_df['id'].isin(train_clips['id'])]
+        train_frames_df = train_pool_frames_df.loc[train_pool_frames_df['id'].isin(train_clips['id'])]
 
     print("Training clips:\n", train_clips_df.describe())
 
+    # Load validation set
     val_frames_path = os.path.join(splits_dir, f'val_set_frames.csv')
     val_clips_path = os.path.join(splits_dir, 'val_set_clips.csv')
     if os.path.exists(val_frames_path) and os.path.exists(val_clips_path):
@@ -497,15 +508,26 @@ def load_data_for_train(
     val_clips_df = val_clips_df.loc[val_clips_df[label_name] != -1]
     val_frames_df = val_frames_df.loc[val_frames_df[label_name] != -1]
     print("Validation clips:\n", val_clips_df.describe())
-    
-    test_frames_path = os.path.join(splits_dir, f'test_set_frames.csv')
-    test_clips_path = os.path.join(splits_dir, 'test_set_clips.csv')
-    if os.path.exists(test_frames_path) and os.path.exists(test_clips_path):
-        test_frames_df = pd.read_csv(test_frames_path)
-        test_clips_df = pd.read_csv(test_clips_path)
+
+    # Load test set
+    if k_fold_test_clips:
+        # For k-fold cross validation in this study, test set constitutes a split of the training pool
+        assert set(k_fold_test_clips['id'].tolist()).issubset(set(train_pool_clips_df['id'].tolist())), \
+            'Some clips in `k_fold_test_clips` are not in the training pool.'
+        assert len(set(k_fold_test_clips['id'].tolist()).intersection(set(train_clips['id'].tolist()))) == 0, \
+            'Nonzero intersection between training and test sets for cross validation'
+        test_clips_df = k_fold_test_clips
+        test_frames_df = train_pool_frames_df.loc[train_pool_frames_df['id'].isin(k_fold_test_clips['id'])]
     else:
-        test_frames_df = pd.DataFrame()
-        test_clips_df = pd.DataFrame()
+        # Load the pre-defined test set
+        test_frames_path = os.path.join(splits_dir, f'test_set_frames.csv')
+        test_clips_path = os.path.join(splits_dir, 'test_set_clips.csv')
+        if os.path.exists(test_frames_path) and os.path.exists(test_clips_path):
+            test_frames_df = pd.read_csv(test_frames_path)
+            test_clips_df = pd.read_csv(test_clips_path)
+        else:
+            test_frames_df = pd.DataFrame()
+            test_clips_df = pd.DataFrame()
     test_clips_df = test_clips_df.loc[test_clips_df[label_name] != -1]
     test_frames_df = test_frames_df.loc[test_frames_df[label_name] != -1]
     print("Test clips:\n", test_clips_df.describe())
@@ -616,7 +638,7 @@ def load_data_for_test(
     return test_loader
 
 
-def split_for_label_efficiency(
+def k_way_train_split(
         splits_dir: str,
         n_splits: int,
         label_col: str,
@@ -626,7 +648,7 @@ def split_for_label_efficiency(
 ) -> List[pd.DataFrame]:
     """
     Splits the training set into `n_splits`, to be used for label efficiency
-    experiments.
+    experiments and k-fold cross-validation.
     :param splits_dir: Directory where train/validation/test CSVs are located
     :param n_splits: Number of subsets to split the training set into
     :param label_col: Column name of the label in the training set CSV
@@ -640,7 +662,7 @@ def split_for_label_efficiency(
     train_clips_df = train_clips_df.loc[train_clips_df[label_col] != -1].reset_index()
 
     # Define the splitter
-    train_sets = []
+    train_clip_dfs = []
     if stratify_by_label:
         group_kfold = StratifiedGroupKFold(n_splits=n_splits, shuffle=True, random_state=seed)
     else:
@@ -654,11 +676,11 @@ def split_for_label_efficiency(
         # Create a training set from all images in the current group division
         train_clips = train_clips_df.loc[fold_index]
         if train_clips[label_col].nunique() > 1:
-            train_sets.append(train_clips)
+            train_clip_dfs.append(train_clips)
             print(f"Train set {i} contains {train_clips.shape[0]} clips from "
                   f"{train_clips[group_col].nunique()} patients. Class distribution is "
                   f"{train_clips[label_col].value_counts(normalize=True).to_dict()}")
         else:
             raise ValueError(f"Only one label found in the {i}'th training subset.")
 
-    return train_sets
+    return train_clip_dfs
