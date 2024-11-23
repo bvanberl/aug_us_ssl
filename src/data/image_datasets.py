@@ -146,8 +146,12 @@ def get_augmentation_transforms(
     pipeline = pipeline.lower()
     if pipeline == "byol_original":
         return get_original_byol_augmentations(height, width, resize=resize, exclude_idx=exclude_idx, prime=prime)
+    if pipeline == "byol_symmetrized":
+        return get_symmetrized_byol_augmentations(height, width, resize=resize, exclude_idx=exclude_idx)
     if pipeline == "byol_grayscale":
         return get_grayscale_byol_augmentations(height, width, resize=resize, exclude_idx=exclude_idx)
+    if pipeline == "byol_original":
+        return get_original_byol_augmentations(height, width, resize=resize, exclude_idx=exclude_idx, prime=prime)
     elif pipeline == "august_original":
         return get_august_original_augmentations(height, width, resize=resize, exclude_idx=exclude_idx, square_roi=square_roi, **augment_kwargs)
     elif pipeline == "august_refined":

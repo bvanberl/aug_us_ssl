@@ -51,44 +51,6 @@ def get_validation_scaling(
     return v2.Compose(transforms)
 
 
-def get_grayscale_byol_augmentations(
-        height: int,
-        width: int,
-        resize: bool = True,
-        mean_pixel_val: List[float] = None,
-        std_pixel_val: List[float] = None,
-        exclude_idx: int = -1
-) -> v2.Compose:
-    """
-    Applies random data transformations according to the data augmentations
-    procedure outlined in VICReg (https://arxiv.org/pdf/2105.04906.pdf),
-    Appendix C.1, which is derived from BYOL.
-    :param height: Image height
-    :param width: Image width
-    :param Desired input channels
-    :param mean_pixel_val: Channel-wise means
-    :param std_pixel_val: Channel-wise standard deviation
-    :param exclude_idx: If not -1, the index of a transform to exclude.
-                        Used for augmentation ablations.
-    :return: Callable augmentation pipeline
-    """
-    gauss_kernel = int(23 * height / 224) # Scale to size of images
-    transforms = [
-        v2.RandomResizedCrop((height, width), scale=(0.08, 1.), antialias=True, interpolation=InterpolationMode.BICUBIC),
-        v2.RandomHorizontalFlip(p=0.5),
-        v2.RandomApply([v2.ColorJitter(0.4, 0.4, 0., 0.)], p=0.8),
-        v2.RandomApply([v2.GaussianBlur(gauss_kernel)], p=0.5),
-        v2.RandomSolarize(128, p=0.1),
-        v2.ToDtype(torch.float32, scale=True),
-        get_normalize_transform(mean_pixel_val, std_pixel_val)
-    ]
-    if exclude_idx > -1:
-        transforms.pop(exclude_idx)     # Leave out one transformation
-    if resize:
-        transforms.insert(0, v2.Resize((height, width)))
-    return v2.Compose(transforms)
-
-
 def get_original_byol_augmentations(
         height: int,
         width: int,
@@ -100,7 +62,7 @@ def get_original_byol_augmentations(
 ) -> v2.Compose:
     """
     Applies random data transformations according to the data augmentations
-    procedure outlined in VICReg (https://arxiv.org/pdf/2105.04906.pdf),
+    procedure outlined in BYOL (https://arxiv.org/abs/2006.07733.pdf),
     Appendix C.1, which is derived from BYOL.
     :param height: Image height
     :param width: Image width
@@ -128,6 +90,87 @@ def get_original_byol_augmentations(
         v2.RandomGrayscale(p=0.2),
         v2.RandomApply([v2.GaussianBlur(gauss_kernel)], p=blur_prob),
         v2.RandomSolarize(128, p=solar_prob),
+        v2.ToDtype(torch.float32, scale=True),
+        get_normalize_transform(mean_pixel_val, std_pixel_val)
+    ]
+    if exclude_idx > -1:
+        transforms.pop(exclude_idx)     # Leave out one transformation
+    if resize:
+        transforms.insert(0, v2.Resize((height, width)))
+    return v2.Compose(transforms)
+
+def get_symmetrized_byol_augmentations(
+        height: int,
+        width: int,
+        resize: bool = True,
+        mean_pixel_val: List[float] = None,
+        std_pixel_val: List[float] = None,
+        exclude_idx: int = -1,
+        prime: bool = False
+) -> v2.Compose:
+    """
+    Applies random data transformations according to the data augmentations
+    procedure outlined in VICReg (https://arxiv.org/pdf/2105.04906.pdf),
+    Appendix C.1, which is a symmetrized version of the BYOL pipeline.
+    :param height: Image height
+    :param width: Image width
+    :param Desired input channels
+    :param mean_pixel_val: Channel-wise means
+    :param std_pixel_val: Channel-wise standard deviation
+    :param exclude_idx: If not -1, the index of a transform to exclude.
+                        Used for augmentation ablations.
+    :param prime: If True, uses augmentation set T', as opposed to T (from paper)
+    :return: Callable augmentation pipeline
+    """
+    gauss_kernel = int(23 * height / 224)  # Scale to size of images
+
+    transforms = [
+        v2.RandomResizedCrop((height, width), scale=(0.08, 1.), antialias=True),
+        v2.RandomHorizontalFlip(p=0.5),
+        v2.RandomApply([v2.ColorJitter(0.4, 0.4, 0.2, 0.1)], p=0.8),
+        v2.RandomGrayscale(p=0.2),
+        v2.RandomApply([v2.GaussianBlur(gauss_kernel)], p=0.5),
+        v2.RandomSolarize(128, p=0.1),
+        v2.ToDtype(torch.float32, scale=True),
+        get_normalize_transform(mean_pixel_val, std_pixel_val)
+    ]
+    if exclude_idx > -1:
+        transforms.pop(exclude_idx)     # Leave out one transformation
+    if resize:
+        transforms.insert(0, v2.Resize((height, width)))
+    return v2.Compose(transforms)
+
+
+def get_grayscale_byol_augmentations(
+        height: int,
+        width: int,
+        resize: bool = True,
+        mean_pixel_val: List[float] = None,
+        std_pixel_val: List[float] = None,
+        exclude_idx: int = -1
+) -> v2.Compose:
+    """
+    Applies random data transformations according to the data augmentations
+    procedure outlined in VICReg (https://arxiv.org/pdf/2105.04906.pdf),
+    Appendix C.1, which is a symmetrized version of the BYOL pipeline.
+    Does not apply any operations that change individual colour channels.
+    :param height: Image height
+    :param width: Image width
+    :param width: Image width
+    :param Desired input channels
+    :param mean_pixel_val: Channel-wise means
+    :param std_pixel_val: Channel-wise standard deviation
+    :param exclude_idx: If not -1, the index of a transform to exclude.
+                        Used for augmentation ablations.
+    :return: Callable augmentation pipeline
+    """
+    gauss_kernel = int(23 * height / 224) # Scale to size of images
+    transforms = [
+        v2.RandomResizedCrop((height, width), scale=(0.08, 1.), antialias=True, interpolation=InterpolationMode.BICUBIC),
+        v2.RandomHorizontalFlip(p=0.5),
+        v2.RandomApply([v2.ColorJitter(0.4, 0.4, 0., 0.)], p=0.8),
+        v2.RandomApply([v2.GaussianBlur(gauss_kernel)], p=0.5),
+        v2.RandomSolarize(128, p=0.1),
         v2.ToDtype(torch.float32, scale=True),
         get_normalize_transform(mean_pixel_val, std_pixel_val)
     ]

@@ -115,7 +115,8 @@ if __name__ == '__main__':
         splits_dir,
         batch_size,
         augment_pipeline=augment_pipeline,
-        use_unlabelled=not bool(cfg['pretrain']['labelled_only']),
+        use_unlabelled=bool(cfg['pretrain']['use_unlabelled']),
+        use_labelled=bool(cfg['pretrain']['use_labelled']),
         n_train_workers=n_train_workers,
         n_val_workers=n_val_workers,
         resize=resize,
@@ -221,7 +222,6 @@ if __name__ == '__main__':
         callbacks=callbacks,
         log_every_n_steps=args['log_interval'],
         deterministic=args['deterministic']
-        #profiler='advanced'
     )
     #trainer.fit(model, train_loader, val_loader, ckpt_path=load_ckpt_path)
     trainer.fit(model, train_loader, ckpt_path=load_ckpt_path)
