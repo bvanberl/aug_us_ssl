@@ -106,7 +106,6 @@ def get_symmetrized_byol_augmentations(
         mean_pixel_val: List[float] = None,
         std_pixel_val: List[float] = None,
         exclude_idx: int = -1,
-        prime: bool = False
 ) -> v2.Compose:
     """
     Applies random data transformations according to the data augmentations

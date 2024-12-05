@@ -20,13 +20,13 @@ pretrain:
   warmup_epochs: 10
   weight_decay: 0.000001
   extractor: 'mobilenetv3'
-  proj_nodes: [576, 128]
+  proj_nodes: [768, 768]
   use_bias: true
   imagenet_weights: true
-  use_unlabelled: false
-  use_labelled: true
+  use_unlabelled: true
+  use_labelled: false
   method: "simclr"
-  augment_pipeline: "august_refined"
+  augment_pipeline: "byol_symmetrized"
   n_cutoff_layers: 0
   exclude_idx: -1
   square_roi: 0

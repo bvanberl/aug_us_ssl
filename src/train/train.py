@@ -67,6 +67,8 @@ def train(
         train_clips=train_clips,
         k_fold_test_clips=test_clips
     )
+    if ckpt_metric is None:
+        val_loader = None   # Don't get validation set metrics if not monitoring val performance
 
     # Finalize run configuration
     run_cfg = {
@@ -155,8 +157,12 @@ def train(
         loggers.append(WandbLogger(log_model="all"))
 
     # Create callbacks
-    ckpt_callback = ModelCheckpoint(monitor='val/loss', dirpath=checkpoint_dir, filename='best-{epoch}-{step}',
-                                    mode='min')
+    if ckpt_metric is not None and 'loss' in ckpt_metric:
+        mode = 'min'
+    else:
+        mode = 'max'
+    ckpt_callback = ModelCheckpoint(monitor=ckpt_metric, dirpath=checkpoint_dir, filename='best-{epoch}-{step}',
+                                    mode=mode)
     callbacks = [
         LearningRateMonitor(logging_interval='step'),
         TQDMProgressBar(refresh_rate=100),
@@ -177,13 +183,15 @@ def train(
     )
     trainer.fit(model, train_loader, val_loader, ckpt_path=load_ckpt_path)
 
-    # Restore the model with lowest validation set loss and evaluate it on the test set
+    
     test_metrics = {}
-    if args['test']:
-        model_path = ckpt_callback.best_model_path
-        print(f"Best model saved at: {model_path}")
-        best_model = Classifier.load_from_checkpoint(model_path)
-        test_metrics = trainer.test(best_model, test_loader)[0]
+    if perform_test:
+        if ckpt_metric is not None:
+            # Restore the model with lowest validation set loss and evaluate it on the test set
+            model_path = ckpt_callback.best_model_path
+            print(f"Best model saved at: {model_path}")
+            model = Classifier.load_from_checkpoint(model_path)  
+        test_metrics = trainer.test(model, test_loader)[0]
 
     if use_wandb:
         wandb.finish()
@@ -260,7 +268,7 @@ def k_fold_cross_validation(cfg: dict, args: dict):
         train_idxs = [j for j in list(range(k)) if j != i]
         train_df = pd.concat([train_dfs[j] for j in train_idxs])
         cur_fold_df = train_dfs[i]
-        test_metrics = train(cfg, args, train_df, test_clips=cur_fold_df)
+        test_metrics = train(cfg, args, train_clips=train_df, test_clips=cur_fold_df, perform_test=True)
 
         if i == 0:
             metrics_df = pd.DataFrame([test_metrics])
@@ -321,9 +329,11 @@ if __name__ == '__main__':
     print(f"Train config after parsing args:\n {json.dumps(cfg['train'], indent=2)}")
 
     if args['experiment_type'] == 'single_train':
-        test_metrics = train(cfg, args)
+        test_metrics = train(cfg, args, ckpt_metric='val/loss')
         print(f"Test metrics: {json.dumps(test_metrics, indent=2)}")
+    elif args['experiment_type'] == 'cross_validation':
+        k_fold_cross_validation(cfg, args)
     elif args['experiment_type'] == 'label_efficiency':
-        label_efficiency_experiment(cfg, args)
+        label_efficiency_experiment(cfg, args, ckpt_metric='val/loss')
     else:
         raise ValueError(f"Unknown experiment type: {args['experiment_type']}")

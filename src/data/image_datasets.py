@@ -150,8 +150,6 @@ def get_augmentation_transforms(
         return get_symmetrized_byol_augmentations(height, width, resize=resize, exclude_idx=exclude_idx)
     if pipeline == "byol_grayscale":
         return get_grayscale_byol_augmentations(height, width, resize=resize, exclude_idx=exclude_idx)
-    if pipeline == "byol_original":
-        return get_original_byol_augmentations(height, width, resize=resize, exclude_idx=exclude_idx, prime=prime)
     elif pipeline == "august_original":
         return get_august_original_augmentations(height, width, resize=resize, exclude_idx=exclude_idx, square_roi=square_roi, **augment_kwargs)
     elif pipeline == "august_refined":
@@ -514,7 +512,7 @@ def load_data_for_train(
     print("Validation clips:\n", val_clips_df.describe())
 
     # Load test set
-    if k_fold_test_clips:
+    if k_fold_test_clips is not None:
         # For k-fold cross validation in this study, test set constitutes a split of the training pool
         assert set(k_fold_test_clips['id'].tolist()).issubset(set(train_pool_clips_df['id'].tolist())), \
             'Some clips in `k_fold_test_clips` are not in the training pool.'

@@ -112,12 +112,11 @@ class JointEmbeddingModel(pl.LightningModule):
         loss, loggables = self.loss(z0, z1)
 
         # Log the loss, loss components, standard deviation of embeddings
-
         if batch_idx % self.train_metric_freq == 0:
             self.log('train/loss', loss, on_step=True, on_epoch=True, prog_bar=True, sync_dist=self.distributed)
-            self.log_dict({f"train/{key}": loggables[key] for key in loggables}, prog_bar=True, on_step=True, on_epoch=True, sync_dist=True)
-            self.log(f"train/z0_std", z0.std(dim=1).mean(), on_step=True, on_epoch=True, sync_dist=True)
-            self.log(f"train/z1_std", z1.std(dim=1).mean(), on_step=True, on_epoch=True, sync_dist=True)
+            self.log_dict({f"train/{key}": loggables[key] for key in loggables}, prog_bar=True, on_step=True, on_epoch=True, sync_dist=self.distributed)
+            self.log(f"train/z0_std", z0.std(dim=1).mean(), on_step=True, on_epoch=True, sync_dist=self.distributed)
+            self.log(f"train/z1_std", z1.std(dim=1).mean(), on_step=True, on_epoch=True, sync_dist=self.distributed)
 
         return loss
 
