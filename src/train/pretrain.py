@@ -34,7 +34,7 @@ if __name__ == '__main__':
     parser.add_argument('--gpus_per_node', default=1, type=int, help='Number of GPUs per node')
     parser.add_argument('--log_interval', default=1, type=int, help='Number of steps after which to log')
     parser.add_argument('--epochs', required=False, type=int, help='Number of pretraining epochs')
-    parser.add_argument('--warmup_epochs', required=False, type=int, help='Number of warmup pretraining epochs')
+    parser.add_argument('--warmup_epochs', required=False, type=float, help='Number of warmup pretraining epochs')
     parser.add_argument('--batch_size', required=False, type=int, help='Pretraining batch size')
     parser.add_argument('--augment_pipeline', required=False, type=str, default=None, help='Augmentation pipeline')
     parser.add_argument('--num_train_workers', required=False, type=int, default=0, help='Number of workers for loading train set')
@@ -47,6 +47,7 @@ if __name__ == '__main__':
     parser.add_argument('--square_roi', required=False, type=int, help='1 if images cropped and resized to square; 0 otherwise')
     parser.add_argument('--train_metric_freq', required=False, type=int, default=100, help='Frequency for logging pretraining metrics (in steps)')
     parser.add_argument('--deterministic', action='store_true', help='If provided, sets the `deterministic` flag in Trainer')
+    parser.add_argument('--precision', required=False, type=str, default='32-true', help='Floating point precision')
 
     args = vars(parser.parse_args())
     print(f"Args: {json.dumps(args, indent=2)}")
@@ -212,7 +213,8 @@ if __name__ == '__main__':
         default_root_dir=checkpoint_dir,
         callbacks=callbacks,
         log_every_n_steps=args['log_interval'],
-        deterministic=args['deterministic']
+        deterministic=args['deterministic'],
+        precision=args['precision']
     )
     #trainer.fit(model, train_loader, val_loader, ckpt_path=load_ckpt_path)
     trainer.fit(model, train_loader, ckpt_path=load_ckpt_path)

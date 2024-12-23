@@ -16,10 +16,11 @@ class WarmupCosineDecayLR(LRScheduler):
             last_epoch: int = -1,
             verbose: bool = False
     ):
-        self.warmup_steps = steps_per_epoch * warmup_epochs
-        self.total_steps = steps_per_epoch * total_epochs
+        self.warmup_steps = int(steps_per_epoch * warmup_epochs)
+        self.total_steps = int(steps_per_epoch * total_epochs)
         self.decay_steps = self.total_steps - self.warmup_steps
         self.max_lr = base_lr * batch_size / 256.
+        print(f"LR COSINE SCHEDULE: Warmup steps: {self.warmup_steps}. Total steps: {self.total_steps}")
         super(WarmupCosineDecayLR, self).__init__(optimizer, last_epoch, verbose)
 
     def get_lr(self) -> List[float]:

@@ -26,7 +26,8 @@ def train(
         train_clips: pd.DataFrame = None,
         test_clips: pd.DataFrame = None,
         ckpt_metric: Optional[str] = None,
-        perform_test: bool = False
+        perform_test: bool = False,
+        save_checkpoints: bool = True,
 ):
     num_nodes = args['nodes']
     num_gpus = args['gpus_per_node']
@@ -161,13 +162,15 @@ def train(
         mode = 'min'
     else:
         mode = 'max'
-    ckpt_callback = ModelCheckpoint(monitor=ckpt_metric, dirpath=checkpoint_dir, filename='best-{epoch}-{step}',
-                                    mode=mode)
+
     callbacks = [
         LearningRateMonitor(logging_interval='step'),
-        TQDMProgressBar(refresh_rate=100),
-        ckpt_callback
+        TQDMProgressBar(refresh_rate=100)
     ]
+    if save_checkpoints:
+        ckpt_callback = ModelCheckpoint(monitor=ckpt_metric, dirpath=checkpoint_dir, filename='best-{epoch}-{step}',
+                                mode=mode)
+        callbacks.append(ckpt_callback)
 
     # Train the model
     trainer = Trainer(
@@ -179,7 +182,8 @@ def train(
         default_root_dir=checkpoint_dir,
         callbacks=callbacks,
         log_every_n_steps=args['log_interval'],
-        deterministic=args['deterministic']
+        deterministic=args['deterministic'],
+        enable_checkpointing=save_checkpoints
     )
     trainer.fit(model, train_loader, val_loader, ckpt_path=load_ckpt_path)
 
@@ -225,7 +229,7 @@ def label_efficiency_experiment(cfg: dict, args: dict):
         print(f"Trial {i + 1} / {n_splits}.\n\n")
 
         args['checkpoint_dir'] = os.path.join(base_checkpoint_dir, f"split{i}")
-        test_metrics = train(cfg, args, train_dfs[i])
+        test_metrics = train(cfg, args, train_dfs[i], save_checkpoints=False)
 
         if i == 0:
             metrics_df = pd.DataFrame([test_metrics])
@@ -268,7 +272,7 @@ def k_fold_cross_validation(cfg: dict, args: dict):
         train_idxs = [j for j in list(range(k)) if j != i]
         train_df = pd.concat([train_dfs[j] for j in train_idxs])
         cur_fold_df = train_dfs[i]
-        test_metrics = train(cfg, args, train_clips=train_df, test_clips=cur_fold_df, perform_test=True)
+        test_metrics = train(cfg, args, train_clips=train_df, test_clips=cur_fold_df, perform_test=True, save_checkpoints=False)
 
         if i == 0:
             metrics_df = pd.DataFrame([test_metrics])
@@ -329,7 +333,7 @@ if __name__ == '__main__':
     print(f"Train config after parsing args:\n {json.dumps(cfg['train'], indent=2)}")
 
     if args['experiment_type'] == 'single_train':
-        test_metrics = train(cfg, args, ckpt_metric='val/loss')
+        test_metrics = train(cfg, args, ckpt_metric='val/loss', save_checkpoints=True)
         print(f"Test metrics: {json.dumps(test_metrics, indent=2)}")
     elif args['experiment_type'] == 'cross_validation':
         k_fold_cross_validation(cfg, args)
