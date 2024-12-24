@@ -137,7 +137,9 @@ def get_augmentation_transforms(
     """Get augmentation transformation pipelines
 
     :param pipeline: Name of pipeline.
-                     One of {'byol', 'august', 'supervised', or 'none'}
+                     One of {'byol_original', 'byol_symmetrized', 'byol_grayscale',
+                      'august_original', 'august_refined', 'august_distilled',
+                      'supervised', or 'none'}
     :param height: Image height
     :param width: Image width
     :param pipeline_kwargs: Pipeline keyword arguments
@@ -154,6 +156,8 @@ def get_augmentation_transforms(
         return get_august_original_augmentations(height, width, resize=resize, exclude_idx=exclude_idx, square_roi=square_roi, **augment_kwargs)
     elif pipeline == "august_refined":
         return get_august_refined_augmentations(height, width, resize=resize, exclude_idx=exclude_idx, square_roi=square_roi, **augment_kwargs)
+    elif pipeline == "august_distilled":
+        return get_august_distilled_augmentations(height, width, resize=resize, exclude_idx=exclude_idx, **augment_kwargs)
     elif pipeline == "supervised":
         return get_supervised_augmentations(height, width, resize=resize, **augment_kwargs)
     else:
