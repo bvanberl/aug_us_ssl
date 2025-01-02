@@ -19,12 +19,12 @@ pretrain:
   max_lr: 0.2
   warmup_epochs: 10
   weight_decay: 0.000001
-  extractor: 'mobilenetv3'
+  extractor: 'mobilenetv2'
   proj_nodes: [576, 576]
   use_bias: true
   imagenet_weights: true
   use_unlabelled: true
-  use_labelled: false
+  use_labelled: true
   method: "simclr"
   augment_pipeline: "byol_symmetrized"
   n_cutoff_layers: 0
@@ -36,7 +36,7 @@ pretrain:
     barlow_twins:
       lambda_: 0.005
     vicreg:
-      lambda_: 8.0
+      lambda_: 25.0
       mu: 25.0
       nu: 1.0
 

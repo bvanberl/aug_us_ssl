@@ -229,7 +229,7 @@ def label_efficiency_experiment(cfg: dict, args: dict):
         print(f"Trial {i + 1} / {n_splits}.\n\n")
 
         args['checkpoint_dir'] = os.path.join(base_checkpoint_dir, f"split{i}")
-        test_metrics = train(cfg, args, train_dfs[i], save_checkpoints=False)
+        test_metrics = train(cfg, args, train_dfs[i], save_checkpoints=False, ckpt_metric='val/loss')
 
         if i == 0:
             metrics_df = pd.DataFrame([test_metrics])
@@ -338,6 +338,6 @@ if __name__ == '__main__':
     elif args['experiment_type'] == 'cross_validation':
         k_fold_cross_validation(cfg, args)
     elif args['experiment_type'] == 'label_efficiency':
-        label_efficiency_experiment(cfg, args, ckpt_metric='val/loss')
+        label_efficiency_experiment(cfg, args)
     else:
         raise ValueError(f"Unknown experiment type: {args['experiment_type']}")

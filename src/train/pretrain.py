@@ -42,7 +42,8 @@ if __name__ == '__main__':
     parser.add_argument('--seed', required=False, type=int, help='Random seed')
     parser.add_argument('--checkpoint_dir', required=False, type=str, help='Directory in which to save checkpoints')
     parser.add_argument('--resume_checkpoint', required=False, type=str, help='Checkpoint to resume from')
-    parser.add_argument('--labelled_only', required=False, type=int, help='Whether to use only examples with labels')
+    parser.add_argument('--use_labelled', required=False, type=int, help='Whether to use only examples with labels')
+    parser.add_argument('--use_unlabelled', required=False, type=int, help='Whether to use only examples with labels')
     parser.add_argument('--exclude_idx', required=False, type=int, help='Index of transform to exclude')
     parser.add_argument('--square_roi', required=False, type=int, help='1 if images cropped and resized to square; 0 otherwise')
     parser.add_argument('--train_metric_freq', required=False, type=int, default=100, help='Frequency for logging pretraining metrics (in steps)')
@@ -91,6 +92,8 @@ if __name__ == '__main__':
     resize = bool(cfg['data']['resize'])
     exclude_idx = cfg['pretrain']['exclude_idx']
     square_roi = bool(cfg['pretrain']['square_roi'])
+    use_unlabelled = args['use_unlabelled'] if args['use_unlabelled'] is not None else cfg['pretrain']['use_unlabelled']
+    use_labelled = args['use_labelled'] if args['use_labelled'] is not None else cfg['pretrain']['use_labelled']
 
     # Determine data augmentation pipeline
     if args["augment_pipeline"] is not None:
@@ -108,8 +111,8 @@ if __name__ == '__main__':
         splits_dir,
         batch_size,
         augment_pipeline=augment_pipeline,
-        use_unlabelled=bool(cfg['pretrain']['use_unlabelled']),
-        use_labelled=bool(cfg['pretrain']['use_labelled']),
+        use_unlabelled=bool(use_unlabelled),
+        use_labelled=bool(use_labelled),
         n_train_workers=n_train_workers,
         n_val_workers=n_val_workers,
         resize=resize,
