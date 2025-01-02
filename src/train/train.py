@@ -310,6 +310,7 @@ if __name__ == '__main__':
     parser.add_argument('--deterministic', action='store_true', help='If provided, sets the `deterministic` flag in Trainer')
     parser.add_argument('--test', action='store_true', help='If provided, performs test set evaluation')
     parser.add_argument('--experiment_type', type=str, default='single_train', required=False, help='Type of training experiment')
+    parser.add_argument('--k-folds', type=str, default=10, required=False, help='Number of folds for k-fold cross-validation')
     args = vars(parser.parse_args())
     print(f"Args: {json.dumps(args, indent=2)}")
 

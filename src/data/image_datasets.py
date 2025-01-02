@@ -681,6 +681,10 @@ def k_way_train_split(
 
         # Create a training set from all images in the current group division
         train_clips = train_clips_df.loc[fold_index]
+        
+        assert train_clips[label_col].nunique() == train_clips_df[label_col].nunique(), \
+            "Each fold must have labels for each class. Try a different random seed."
+            
         if train_clips[label_col].nunique() > 1:
             train_clip_dfs.append(train_clips)
             print(f"Train set {i} contains {train_clips.shape[0]} clips from "
