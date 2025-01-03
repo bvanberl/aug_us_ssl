@@ -4,7 +4,7 @@ import torch
 from torch.nn import Module, Sequential, Identity, AdaptiveAvgPool2d
 import torchvision
 from torchvision.models import resnet18, efficientnet_b0, \
-    mobilenet_v3_small, vgg16
+    mobilenet_v3_small, mobilenet_v3_large, vgg16
 
 torchvision.disable_beta_transforms_warning()
 
@@ -12,6 +12,7 @@ torchvision.disable_beta_transforms_warning()
 RESNET18_WEIGHTS = "https://download.pytorch.org/models/resnet18-f37072fd.pth"
 EFFICIENTNETB0_WEIGHTS = "https://download.pytorch.org/models/efficientnet_b0_rwightman-7f5810bc.pth"
 MOBILENETV3S_WEIGHTS = "https://download.pytorch.org/models/mobilenet_v3_small-047dcff4.pth"
+MOBILENETV3L_WEIGHTS = "https://download.pytorch.org/models/mobilenet_v3_large-8738ca79.pth"
 VGG16_WEIGHTS = "https://download.pytorch.org/models/vgg16-397923af.pth"
 
 
@@ -39,8 +40,10 @@ def get_extractor(
         model = get_resnet14(imagenet_weights, n_cutoff_layers)
     elif extractor_name == 'efficientnetb0':
         model = get_efficientnetb0(imagenet_weights, n_cutoff_layers)
-    elif extractor_name == 'mobilenetv3':
+    elif extractor_name == 'mobilenetv3s':
         model = get_mobilenetv3s(imagenet_weights, n_cutoff_layers)
+    elif extractor_name == 'mobilenetv3l':
+        model = get_mobilenetv3l(imagenet_weights, n_cutoff_layers)
     elif extractor_name == 'vgg16':
         model = get_vgg16(imagenet_weights, n_cutoff_layers)
     else:
@@ -98,6 +101,20 @@ def get_mobilenetv3s(
     extractor = mobilenet_v3_small()
     if imagenet_weights:
         state_dict = torch.hub.load_state_dict_from_url(MOBILENETV3S_WEIGHTS)
+        extractor.load_state_dict(state_dict)
+    extractor.classifier = Identity()
+    extractor.fc = Identity()
+    if n_cutoff_layers > 0:
+        extractor = Sequential(*list(extractor.children())[:-(n_cutoff_layers + 1)])
+    return extractor
+
+def get_mobilenetv3l(
+    imagenet_weights: bool = False,
+    n_cutoff_layers: int = 0
+) -> Module:
+    extractor = mobilenet_v3_large()
+    if imagenet_weights:
+        state_dict = torch.hub.load_state_dict_from_url(MOBILENETV3L_WEIGHTS)
         extractor.load_state_dict(state_dict)
     extractor.classifier = Identity()
     extractor.fc = Identity()

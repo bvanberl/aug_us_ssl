@@ -19,7 +19,7 @@ pretrain:
   max_lr: 0.2
   warmup_epochs: 10
   weight_decay: 0.000001
-  extractor: 'mobilenetv2'
+  extractor: 'mobilenetv3s'
   proj_nodes: [576, 576]
   use_bias: true
   imagenet_weights: true
@@ -32,7 +32,7 @@ pretrain:
   square_roi: 0
   hparams:
     simclr:
-      tau: 0.1
+      tau: 0.5
     barlow_twins:
       lambda_: 0.005
     vicreg:
@@ -46,8 +46,8 @@ train:
   linear: false
   epochs: 10
   batch_size: 256
-  lr_head: 0.02
-  lr_extractor: 0.002
+  lr_head: 0.01
+  lr_extractor: 0.001
   weight_decay: 0.000001
   extractor: 'mobilenetv3'
   extractor_weights: 'B:/Downloads/epoch=9-step=6020.ckpt'
