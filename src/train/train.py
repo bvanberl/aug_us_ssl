@@ -189,7 +189,7 @@ def train(
 
     
     test_metrics = {}
-    if perform_test:
+    if perform_test and save_checkpoints:
         if ckpt_metric is not None:
             # Restore the model with lowest validation set loss and evaluate it on the test set
             model_path = ckpt_callback.best_model_path
@@ -229,7 +229,7 @@ def label_efficiency_experiment(cfg: dict, args: dict):
         print(f"Trial {i + 1} / {n_splits}.\n\n")
 
         args['checkpoint_dir'] = os.path.join(base_checkpoint_dir, f"split{i}")
-        test_metrics = train(cfg, args, train_dfs[i], save_checkpoints=False, ckpt_metric='val/loss')
+        test_metrics = train(cfg, args, train_dfs[i], save_checkpoints=False, perform_test=True)
 
         if i == 0:
             metrics_df = pd.DataFrame([test_metrics])
@@ -334,7 +334,7 @@ if __name__ == '__main__':
     print(f"Train config after parsing args:\n {json.dumps(cfg['train'], indent=2)}")
 
     if args['experiment_type'] == 'single_train':
-        test_metrics = train(cfg, args, ckpt_metric='val/loss', save_checkpoints=True)
+        test_metrics = train(cfg, args, ckpt_metric='val/loss', save_checkpoints=True, perform_test=args['test'])
         print(f"Test metrics: {json.dumps(test_metrics, indent=2)}")
     elif args['experiment_type'] == 'cross_validation':
         k_fold_cross_validation(cfg, args)

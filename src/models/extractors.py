@@ -40,7 +40,7 @@ def get_extractor(
         model = get_resnet14(imagenet_weights, n_cutoff_layers)
     elif extractor_name == 'efficientnetb0':
         model = get_efficientnetb0(imagenet_weights, n_cutoff_layers)
-    elif extractor_name == 'mobilenetv3s':
+    elif extractor_name == 'mobilenetv3s' or extractor_name == 'mobilenetv3':
         model = get_mobilenetv3s(imagenet_weights, n_cutoff_layers)
     elif extractor_name == 'mobilenetv3l':
         model = get_mobilenetv3l(imagenet_weights, n_cutoff_layers)

@@ -212,8 +212,8 @@ def prepare_pretrain_dataloader(
         resize=resize,
         exclude_idx=exclude_idx,
         square_roi=square_roi,
-        prime=False
-        #**preprocess_kwargs["augmentation"]
+        prime=False,
+        **preprocess_kwargs["augmentation"]
     )
     augment2 = get_augmentation_transforms(
         augment_pipeline,
@@ -222,8 +222,8 @@ def prepare_pretrain_dataloader(
         resize=resize,
         exclude_idx=exclude_idx,
         square_roi=square_roi,
-        prime=True
-        # **preprocess_kwargs["augmentation"]
+        prime=True,
+        **preprocess_kwargs["augmentation"]
     )
 
     dataset = ImagePretrainDataset(

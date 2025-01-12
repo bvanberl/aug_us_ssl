@@ -32,7 +32,9 @@ pretrain:
   square_roi: 0
   hparams:
     simclr:
-      tau: 0.5
+      tau: 0.1
+      augmentation:
+        min_crop: 0.08
     barlow_twins:
       lambda_: 0.005
     vicreg:
@@ -46,10 +48,10 @@ train:
   linear: false
   epochs: 10
   batch_size: 256
-  lr_head: 0.01
-  lr_extractor: 0.001
+  lr_head: 0.02
+  lr_extractor: 0.002
   weight_decay: 0.000001
-  extractor: 'mobilenetv3'
+  extractor: 'mobilenetv3s'
   extractor_weights: 'B:/Downloads/epoch=9-step=6020.ckpt'
   augment_pipeline: "supervised"
   k_folds: 10

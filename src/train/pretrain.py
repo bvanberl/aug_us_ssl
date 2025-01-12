@@ -49,6 +49,7 @@ if __name__ == '__main__':
     parser.add_argument('--train_metric_freq', required=False, type=int, default=100, help='Frequency for logging pretraining metrics (in steps)')
     parser.add_argument('--deterministic', action='store_true', help='If provided, sets the `deterministic` flag in Trainer')
     parser.add_argument('--precision', required=False, type=str, default='32-true', help='Floating point precision')
+    parser.add_argument('--min_crop', required=False, type=str, default=None, help='Minimum crop for random crop & resize')
 
     args = vars(parser.parse_args())
     print(f"Args: {json.dumps(args, indent=2)}")
@@ -79,6 +80,8 @@ if __name__ == '__main__':
     for k in args:
         if k in hparams and args[k] is not None:
             hparams[k] = args[k]
+    if args['min_crop']:
+        hparams['augmentation']['min_crop'] = args['min_crop']
 
     # Specify image directory, splits CSV directory, image shape, batch size
     image_dir = args['image_dir'] if args['image_dir'] else cfg["paths"]["images"]
