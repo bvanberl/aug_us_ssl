@@ -189,8 +189,8 @@ def train(
 
     
     test_metrics = {}
-    if perform_test and save_checkpoints:
-        if ckpt_metric is not None:
+    if perform_test:
+        if ckpt_metric is not None and save_checkpoints:
             # Restore the model with lowest validation set loss and evaluate it on the test set
             model_path = ckpt_callback.best_model_path
             print(f"Best model saved at: {model_path}")
@@ -229,7 +229,7 @@ def label_efficiency_experiment(cfg: dict, args: dict):
         print(f"Trial {i + 1} / {n_splits}.\n\n")
 
         args['checkpoint_dir'] = os.path.join(base_checkpoint_dir, f"split{i}")
-        test_metrics = train(cfg, args, train_dfs[i], save_checkpoints=False, perform_test=True)
+        test_metrics = train(cfg, args, train_dfs[i], save_checkpoints=True, perform_test=True)
 
         if i == 0:
             metrics_df = pd.DataFrame([test_metrics])

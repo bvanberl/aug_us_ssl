@@ -326,7 +326,7 @@ def get_august_refined_augmentations(
         ),
         v2.RandomApply([HorizontalReflection()], p=reflect_prob),
         v2.RandomApply([AffineKeypoint(max_shift=0.2, max_rotation=45, min_scale=1.0, max_scale=1.0)], p=shift_rotate_prob),
-        v2.RandomApply([RandomResizedCropKeypoint((height, width), scale=(0.08, 1.), antialias=True)], p=crop_prob),
+        v2.RandomApply([RandomResizedCropKeypoint((height, width), scale=(0.08, 1.), antialias=True)], p=crop_prob, interpolation=InterpolationMode.BICUBIC),
         v2.RandomApply([v2.GaussianBlur(gauss_kernel)], p=blur_prob),
         v2.ToDtype(torch.float32, scale=True),
         get_normalize_transform(mean_pixel_val, std_pixel_val)
@@ -347,6 +347,8 @@ def get_august_distilled_augmentations(
         shift_rotate_prob: float = 0.5,
         crop_prob: float = 1.0,
         min_crop: float = 0.08,
+        min_ratio: float = 0.75,
+        max_ratio: float = 4.0 / 3.0,
         resize: bool = True,
         mean_pixel_val: List[float] = None,
         std_pixel_val: List[float] = None,
@@ -374,7 +376,7 @@ def get_august_distilled_augmentations(
         ),
         v2.RandomApply([v2.ColorJitter(0.4, 0.4, 0.2, 0.1)], p=color_jitter_prob),
         v2.RandomApply([AffineKeypoint(max_shift=0.2, max_rotation=45, min_scale=1.0, max_scale=1.0)], p=shift_rotate_prob),
-        v2.RandomApply([RandomResizedCropKeypoint((height, width), scale=(min_crop, 1.), antialias=True)], p=crop_prob),
+        v2.RandomApply([RandomResizedCropKeypoint((height, width), scale=(min_crop, 1.), ratio=(min_ratio, max_ratio), antialias=True)], p=crop_prob, interpolation=InterpolationMode.BICUBIC),
         v2.ToDtype(torch.float32, scale=True),
         get_normalize_transform(mean_pixel_val, std_pixel_val)
     ]
@@ -384,7 +386,52 @@ def get_august_distilled_augmentations(
         transforms.insert(0, ResizeKeypoint(size=[height, width]))
     print(f"TRANSFORMS: {transforms}")
     print(f"MIN CROP: {min_crop}")
+    print(f"MIN RAIO: {min_ratio}")
+    print(f"MAX RATIO: {max_ratio}")
     return v2.Compose(transforms)
+
+def get_crop_only_augmentations(
+        height: int,
+        width: int,
+        crop_prob: float = 1.0,
+        min_crop: float = 0.08,
+        min_ratio: float = 0.75,
+        max_ratio: float = 4.0 / 3.0,
+        resize: bool = True,
+        mean_pixel_val: List[float] = None,
+        std_pixel_val: List[float] = None,
+        exclude_idx: int = -1,
+        **kwargs
+):
+    """Applies random transformations to input B-mode image from the distilled pipeline.
+
+    :param brightness_contrast_prob: Probability of applying brightness/contrast augmentation
+    :param gaussian_prob: Probability of applying Gaussian noise augmentation
+    :param sp_prob: Probability of applying salt & pepper noise augmentation
+    :param reflect_prob: Probability of horizontal reflection augmentation
+    :param shift_rotate_prob: Probability of random shift and rotation augmentation
+    :param crop_prob: Probability of applying random crop and resize augmentation
+    :param mean_pixel_val: Channel-wise means
+    :param std_pixel_val: Channel-wise standard deviation
+    :param exclude_idx: If not -1, the index of a transform to exclude.
+                        Used for augmentation ablations.
+    :return: Callable augmentation pipeline
+    """
+    transforms = [
+        v2.RandomApply([RandomResizedCrop((height, width), scale=(min_crop, 1.), ratio=(min_ratio, max_ratio), antialias=True)], p=crop_prob, interpolation=InterpolationMode.BICUBIC),
+        v2.ToDtype(torch.float32, scale=True),
+        get_normalize_transform(mean_pixel_val, std_pixel_val)
+    ]
+    if exclude_idx > -1:
+        transforms.pop(exclude_idx)     # Leave out one transformation
+    if resize:
+        transforms.insert(0, Resize(size=[height, width]))
+    print(f"TRANSFORMS: {transforms}")
+    print(f"MIN CROP: {min_crop}")
+    print(f"MIN RAIO: {min_ratio}")
+    print(f"MAX RATIO: {max_ratio}")
+    return v2.Compose(transforms)
+
 
 
 def get_supervised_augmentations(

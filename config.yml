@@ -35,12 +35,18 @@ pretrain:
       tau: 0.1
       augmentation:
         min_crop: 0.08
+        min_ratio: 1.0
+        max_ratio: 1.0
     barlow_twins:
       lambda_: 0.005
     vicreg:
       lambda_: 25.0
       mu: 25.0
       nu: 1.0
+      augmentation:
+        min_crop: 0.08
+        min_ratio: 0.75
+        max_ratio: 1.33333333333333
 
 train:
   seed: 11
