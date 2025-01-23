@@ -376,7 +376,7 @@ def get_august_distilled_augmentations(
         ),
         v2.RandomApply([v2.ColorJitter(0.4, 0.4, 0.2, 0.1)], p=color_jitter_prob),
         v2.RandomApply([AffineKeypoint(max_shift=0.2, max_rotation=45, min_scale=1.0, max_scale=1.0)], p=shift_rotate_prob),
-        v2.RandomApply([RandomResizedCropKeypoint((height, width), scale=(min_crop, 1.), ratio=(min_ratio, max_ratio), antialias=True)], p=crop_prob, interpolation=InterpolationMode.BICUBIC),
+        v2.RandomApply([RandomResizedCropKeypoint((height, width), scale=(min_crop, 1.), ratio=(min_ratio, max_ratio), antialias=True, interpolation=InterpolationMode.BICUBIC)], p=crop_prob),
         v2.ToDtype(torch.float32, scale=True),
         get_normalize_transform(mean_pixel_val, std_pixel_val)
     ]
@@ -418,14 +418,14 @@ def get_crop_only_augmentations(
     :return: Callable augmentation pipeline
     """
     transforms = [
-        v2.RandomApply([RandomResizedCrop((height, width), scale=(min_crop, 1.), ratio=(min_ratio, max_ratio), antialias=True)], p=crop_prob, interpolation=InterpolationMode.BICUBIC),
+        v2.RandomApply([v2.RandomResizedCrop((height, width), scale=(min_crop, 1.), ratio=(min_ratio, max_ratio), antialias=True, interpolation=InterpolationMode.BICUBIC)], p=crop_prob),
         v2.ToDtype(torch.float32, scale=True),
         get_normalize_transform(mean_pixel_val, std_pixel_val)
     ]
     if exclude_idx > -1:
         transforms.pop(exclude_idx)     # Leave out one transformation
     if resize:
-        transforms.insert(0, Resize(size=[height, width]))
+        transforms.insert(0, v2.Resize(size=[height, width]))
     print(f"TRANSFORMS: {transforms}")
     print(f"MIN CROP: {min_crop}")
     print(f"MIN RAIO: {min_ratio}")
