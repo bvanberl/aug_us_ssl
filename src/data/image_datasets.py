@@ -1,3 +1,4 @@
+import json
 import os
 from typing import Optional, Callable
 import sys
@@ -5,9 +6,11 @@ import traceback
 
 import pandas as pd
 import numpy as np
+import torch
 from torch.utils.data import Dataset, DataLoader
 from torchvision.transforms.v2 import Compose
 from torchvision.io import read_image, ImageReadMode
+from torchvision import tv_tensors
 from sklearn.model_selection import GroupKFold, StratifiedGroupKFold
 
 from src.constants import Probe
@@ -122,6 +125,73 @@ class ImageClassificationDataset(Dataset):
 
         y = self.labels[idx]
         return x, y
+
+
+class ImageObjectDetectionDataset(Dataset):
+    def __init__(
+            self,
+            img_root_dir: str,
+            img_paths: List[str],
+            labels: List[str],
+            n_classes: int,
+            height: int,
+            width: int,
+            transforms: Optional[Callable],
+            img_ext: str = ".jpg",
+            device: str = "cpu"
+    ):
+        assert len(img_paths) == len(labels), "Number of images and labels must match."
+        self.image_paths = [p.replace("\\", "/") for p in img_paths]
+        self.img_ext = img_ext
+        self.img_root_dir = img_root_dir
+        self.n_classes = n_classes
+        self.width = width
+        self.height = height
+        self.scale = torch.tensor([[self.width, self.height, self.width, self.height]], dtype=torch.float32)
+        self.labels = labels
+        self.transforms = transforms
+        self.device = device
+        self.cardinality = len(self.image_paths)
+
+    def __len__(self):
+        return self.cardinality
+
+    def __getitem__(self, idx):
+
+        # Load image
+        image_path = os.path.join(
+            self.img_root_dir,
+            self.image_paths[idx]
+        )
+        x = read_image(image_path).to(self.device)
+
+        # Load bounding box and class labels
+        label_dict = json.loads(self.labels[idx])
+        if len(label_dict['boxes']) == 0:
+            y = {
+                'boxes': torch.empty((0, 4), dtype=torch.float32),
+                'labels': torch.empty((0,), dtype=torch.int64)
+            }   # Hard negative (label is the absence of objects)
+        else:
+            y = {
+                'boxes': torch.tensor(label_dict['boxes'], dtype=torch.float32) * self.scale,
+                'labels': torch.tensor(label_dict['labels'], dtype=torch.int64)
+            }
+
+        # Apply data augmentation transforms
+        if self.transforms:
+            boxes = tv_tensors.BoundingBoxes(y['boxes'], format="XYXY", canvas_size=(self.height, self.width))
+            t = self.transforms({"image": x, "boxes": boxes, "labels": y['labels']})
+            x = t['image']
+            y['boxes'] = t['boxes'].data
+            y['labels'] = t['labels'].data
+
+        return x, y
+
+def collate_fn_obj_det(batch):
+    images = [item[0] for item in batch]
+    targets = [item[1] for item in batch]
+    return images, targets
 
 
 def get_augmentation_transforms(
@@ -288,19 +358,33 @@ def prepare_train_dataloader(
         augment_pipeline,
         height,
         width,
-        resize=resize
+        resize=resize,
+        **preprocess_kwargs
     )
 
-    n_classes = file_df[label_name].nunique()
-    dataset = ImageClassificationDataset(
-        img_root,
-        file_df['filepath'].tolist(),
-        file_df[label_name].to_numpy(),
-        n_classes,
-        transforms=augmentations
-    )
+    if label_name == 'pl_label':
+        n_classes = 2
+        dataset = ImageObjectDetectionDataset(
+            img_root,
+            file_df['filepath'].tolist(),
+            file_df[label_name].tolist(),
+            n_classes,
+            height,
+            width,
+            transforms=augmentations
+        )
+    else:
+        n_classes = file_df[label_name].nunique()
+        dataset = ImageClassificationDataset(
+            img_root,
+            file_df['filepath'].tolist(),
+            file_df[label_name].to_numpy(),
+            n_classes,
+            transforms=augmentations
+        )
 
     persistent_workers = n_workers > 0
+    collate_fn = collate_fn_obj_det if label_name == 'pl_label' else None
     data_loader = DataLoader(
         dataset,
         batch_size=batch_size,
@@ -308,7 +392,8 @@ def prepare_train_dataloader(
         num_workers=n_workers,
         drop_last=drop_last,
         pin_memory=True,
-        persistent_workers=persistent_workers
+        persistent_workers=persistent_workers,
+        collate_fn=collate_fn
     )
     return data_loader
 
@@ -484,6 +569,8 @@ def load_data_for_train(
     :return: datasets for training
     """
 
+    unl_val = '-1' if label_name == 'pl_label' else -1
+
     # Load training set
     train_frames_path = os.path.join(splits_dir, f'train_set_frames.csv')
     train_clips_path = os.path.join(splits_dir, 'train_set_clips.csv')
@@ -494,14 +581,13 @@ def load_data_for_train(
         train_pool_frames_df = pd.DataFrame()
         train_pool_clips_df = pd.DataFrame()
     if train_clips is None:
-        train_clips_df = train_pool_clips_df.loc[train_pool_clips_df[label_name] != -1]
-        train_frames_df = train_pool_frames_df.loc[train_pool_frames_df[label_name] != -1]
+        train_clips_df = train_pool_clips_df.loc[train_pool_clips_df[label_name] != unl_val]
+        train_frames_df = train_pool_frames_df.loc[train_pool_frames_df[label_name] != unl_val]
     else:
         assert set(train_clips['id'].tolist()).issubset(set(train_pool_clips_df['id'].tolist())), \
             'Some clips in `train_clips` are not in the training pool.'
         train_clips_df = train_clips
         train_frames_df = train_pool_frames_df.loc[train_pool_frames_df['id'].isin(train_clips['id'])]
-
     print("Training clips:\n", train_clips_df.describe())
 
     # Load validation set
@@ -513,8 +599,8 @@ def load_data_for_train(
     else:
         val_frames_df = pd.DataFrame()
         val_clips_df = pd.DataFrame()
-    val_clips_df = val_clips_df.loc[val_clips_df[label_name] != -1]
-    val_frames_df = val_frames_df.loc[val_frames_df[label_name] != -1]
+    val_clips_df = val_clips_df.loc[val_clips_df[label_name] != unl_val]
+    val_frames_df = val_frames_df.loc[val_frames_df[label_name] != unl_val]
     print("Validation clips:\n", val_clips_df.describe())
 
     # Load test set
@@ -536,8 +622,8 @@ def load_data_for_train(
         else:
             test_frames_df = pd.DataFrame()
             test_clips_df = pd.DataFrame()
-    test_clips_df = test_clips_df.loc[test_clips_df[label_name] != -1]
-    test_frames_df = test_frames_df.loc[test_frames_df[label_name] != -1]
+    test_clips_df = test_clips_df.loc[test_clips_df[label_name] != unl_val]
+    test_frames_df = test_frames_df.loc[test_frames_df[label_name] != unl_val]
     print("Test clips:\n", test_clips_df.describe())
 
     train_loader = prepare_train_dataloader(

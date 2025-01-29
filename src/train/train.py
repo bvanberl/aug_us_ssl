@@ -13,6 +13,7 @@ from pytorch_lightning.loggers import WandbLogger, TensorBoardLogger
 from pytorch_lightning.callbacks import LearningRateMonitor, TQDMProgressBar, ModelCheckpoint
 
 from src.models.classifier import Classifier
+from src.models.ssd import SSDLite
 from src.models.joint_embedding import JointEmbeddingModel
 from src.models.extractors import get_extractor
 from src.data.image_datasets import load_data_for_train, k_way_train_split
@@ -52,6 +53,7 @@ def train(
         augment_pipeline = args["augment_pipeline"]
     else:
         augment_pipeline = cfg['train']['augment_pipeline']
+    min_crop = args['min_crop']
 
     # Create training and validation data loaders
     train_loader, val_loader, test_loader = load_data_for_train(
@@ -66,7 +68,8 @@ def train(
         n_val_workers=n_val_workers,
         n_test_workers=n_test_workers,
         train_clips=train_clips,
-        k_fold_test_clips=test_clips
+        k_fold_test_clips=test_clips,
+        min_crop=min_crop
     )
     if ckpt_metric is None:
         val_loader = None   # Don't get validation set metrics if not monitoring val performance
@@ -123,17 +126,30 @@ def train(
             extractor = je_model.extractor
 
         n_classes = train_loader.dataset.n_classes
-        model = Classifier(
-            extractor,
-            img_dim,
-            n_classes,
-            cfg['train']['lr_head'],
-            cfg['train']['lr_extractor'],
-            epochs,
-            cfg['train']['weight_decay'],
-            bool(cfg['train']['linear']),
-            world_size
-        )
+        if label_name == 'pl_label':
+            model = SSDLite(
+                extractor,
+                img_dim,
+                n_classes,
+                cfg['train']['lr_head'],
+                cfg['train']['lr_extractor'],
+                epochs,
+                cfg['train']['weight_decay'],
+                bool(cfg['train']['linear']),
+                world_size
+            )
+        else:
+            model = Classifier(
+                extractor,
+                img_dim,
+                n_classes,
+                cfg['train']['lr_head'],
+                cfg['train']['lr_extractor'],
+                epochs,
+                cfg['train']['weight_decay'],
+                bool(cfg['train']['linear']),
+                world_size
+            )
         model.summary()
         print("\n\n\n")
 
@@ -165,7 +181,7 @@ def train(
 
     callbacks = [
         LearningRateMonitor(logging_interval='step'),
-        TQDMProgressBar(refresh_rate=100)
+        TQDMProgressBar(refresh_rate=args['log_interval'])
     ]
     if save_checkpoints:
         ckpt_callback = ModelCheckpoint(monitor=ckpt_metric, dirpath=checkpoint_dir, filename='best-{epoch}-{step}',
@@ -194,7 +210,10 @@ def train(
             # Restore the model with lowest validation set loss and evaluate it on the test set
             model_path = ckpt_callback.best_model_path
             print(f"Best model saved at: {model_path}")
-            model = Classifier.load_from_checkpoint(model_path)  
+            if label_name == 'pl_label':
+                model = SSDLite.load_from_checkpoint(model_path)
+            else:
+                model = Classifier.load_from_checkpoint(model_path)
         test_metrics = trainer.test(model, test_loader)[0]
 
     if use_wandb:
@@ -311,6 +330,7 @@ if __name__ == '__main__':
     parser.add_argument('--test', action='store_true', help='If provided, performs test set evaluation')
     parser.add_argument('--experiment_type', type=str, default='single_train', required=False, help='Type of training experiment')
     parser.add_argument('--k-folds', type=int, default=10, required=False, help='Number of folds for k-fold cross-validation')
+    parser.add_argument('--min_crop', required=False, type=float, default=0.7, help='Minimum crop for random crop & resize')
     args = vars(parser.parse_args())
     print(f"Args: {json.dumps(args, indent=2)}")
 

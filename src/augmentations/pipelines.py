@@ -440,9 +440,11 @@ def get_supervised_augmentations(
         crop_prob: float = 0.5,
         reflect_prob: float = 0.5,
         brightness_contrast_prob: float = 0.5,
+        min_crop: float = 0.7,
         resize: bool = True,
         mean_pixel_val: List[float] = None,
-        std_pixel_val: List[float] = None
+        std_pixel_val: List[float] = None,
+        **kwargs
 ):
     """Applies random transformations to input B-mode image.
 
@@ -456,7 +458,9 @@ def get_supervised_augmentations(
     :return: Callable augmentation pipeline
     """
     transforms = [
-        v2.RandomApply([v2.RandomResizedCrop((height, width), scale=(0.7, 1.), antialias=True)], p=crop_prob),
+        v2.RandomApply([v2.RandomResizedCrop((height, width), scale=(min_crop, 1.), antialias=True)], p=crop_prob),
+        v2.ClampBoundingBoxes(),
+        v2.SanitizeBoundingBoxes(),
         v2.RandomHorizontalFlip(p=reflect_prob),
         v2.RandomApply([v2.ColorJitter(0.2, 0.2, 0., 0.)], p=brightness_contrast_prob),
         v2.ToDtype(torch.float32, scale=True),
