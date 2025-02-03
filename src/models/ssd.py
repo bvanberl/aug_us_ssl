@@ -2,6 +2,7 @@ from typing import Tuple, Dict, List, Optional
 import gc
 import math
 import time
+from collections import OrderedDict
 from functools import partial
 
 import torch
@@ -61,6 +62,30 @@ class PLBoxGenerator(DefaultBoxGenerator):
         return [2 + len(r) for r in self.aspect_ratios]  #  *** Only 1 ratio per feature map
 
 
+class SSDLiteMobileNetWrapper(nn.Module):
+
+    def __init__(self, backbone, feature_indices):
+        super().__init__()
+        self.backbone = backbone.features
+
+        # Extract feature maps from different layers
+        self.feature_layers = [f'{i}' for i in feature_indices]
+
+        self.feature_shapes = []
+
+    def forward(self, x):
+        features = []
+        feat_shapes = []
+        for name, layer in self.backbone.named_children():
+            x = layer(x)
+            if name in self.feature_layers:
+                features.append(x)
+                feat_shapes.append(x.shape[1:])
+            if len(self.feature_shapes) == 0:
+                self.feature_shapes = feat_shapes
+        return OrderedDict([(str(i), v) for i, v in enumerate(features)])  # Return multi-scale features
+
+
 class SSDLite(pl.LightningModule):
     
     def __init__(
@@ -93,11 +118,12 @@ class SSDLite(pl.LightningModule):
         self.frozen_backbone = frozen_backbone
         norm_layer = partial(nn.BatchNorm2d, eps=0.001, momentum=0.03)
 
-        backbone = _mobilenet_extractor(
-            extractor,
-            0 if self.frozen_backbone else 6,
-            norm_layer,
-        ).cuda()
+        # backbone = _mobilenet_extractor(
+        #     extractor,
+        #     0 if self.frozen_backbone else 6,
+        #     norm_layer,
+        # ).cuda()
+        backbone = SSDLiteMobileNetWrapper(extractor, [1, 3, 6, 9, 12])
 
         size = input_shape[1:3]
         anchor_generator = PLBoxGenerator([[2, 3, 4, 5] for _ in range(6)], min_ratio=0.0028, max_ratio=0.15) #max_ratio=0.015)
@@ -116,7 +142,7 @@ class SSDLite(pl.LightningModule):
             nms_thresh=0.45,
             score_thresh=0.01,
             topk_candidates=400,
-            positive_fraction=0.05,
+            positive_fraction=0.25,
             detections_per_img=200
         )
         
@@ -153,8 +179,8 @@ class SSDLite(pl.LightningModule):
 
     def on_train_epoch_end(self):
         map_dict = self.train_map_metric.compute()
-        self.log("train/mAP", map_dict['map'], prog_bar=True, sync_dist=self.distributed)
-        self.log("train/mAP@50", map_dict['map_50'], prog_bar=True, sync_dist=self.distributed)
+        self.log("train/mAP", map_dict['map'], prog_bar=True, on_epoch=True, sync_dist=self.distributed)
+        self.log("train/mAP@50", map_dict['map_50'], prog_bar=True, on_epoch=True, sync_dist=self.distributed)
         self.train_map_metric.reset()
         
     def validation_step(self, batch, batch_idx):
@@ -176,8 +202,8 @@ class SSDLite(pl.LightningModule):
 
     def on_validation_epoch_end(self):
         map_dict = self.val_map_metric.compute()
-        self.log("val/mAP", map_dict['map'], prog_bar=True, sync_dist=self.distributed)
-        self.log("val/mAP@50", map_dict['map_50'], prog_bar=True, sync_dist=self.distributed)
+        self.log("val/mAP", map_dict['map'], prog_bar=True, on_epoch=True, sync_dist=self.distributed)
+        self.log("val/mAP@50", map_dict['map_50'], prog_bar=True, on_epoch=True, sync_dist=self.distributed)
         self.val_map_metric.reset()
     
     def test_step(self, batch, batch_idx):
@@ -199,8 +225,8 @@ class SSDLite(pl.LightningModule):
 
     def on_test_epoch_end(self):
         map_dict = self.test_map_metric.compute()
-        self.log("test/mAP", map_dict['map'], prog_bar=True, sync_dist=self.distributed)
-        self.log("test/mAP@50", map_dict['map_50'], prog_bar=True, sync_dist=self.distributed)
+        self.log("test/mAP", map_dict['map'], prog_bar=True, on_epoch=True, sync_dist=self.distributed)
+        self.log("test/mAP@50", map_dict['map_50'], prog_bar=True, on_epoch=True, sync_dist=self.distributed)
         self.test_map_metric.reset()
 
     def configure_optimizers(self):
@@ -213,7 +239,6 @@ class SSDLite(pl.LightningModule):
 
     def summary(self):
         torchsummary.summary(self.model.backbone.cuda(), input_size=self.input_shape)
-        print(self.model.head)
-        #torchsummary.summary(self.model.head.cuda(), input_size=self.input_shape)
+        #torchsummary.summary(self.model.head.cuda(), input_size=self.model.backbone.feature_shapes)
 
         
