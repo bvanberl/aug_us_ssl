@@ -434,7 +434,42 @@ def get_crop_only_augmentations(
 
 
 
-def get_supervised_augmentations(
+def get_supervised_augmentations_cls(
+        height: int,
+        width: int,
+        crop_prob: float = 0.5,
+        reflect_prob: float = 0.5,
+        brightness_contrast_prob: float = 0.5,
+        min_crop: float = 0.7,
+        resize: bool = True,
+        mean_pixel_val: List[float] = None,
+        std_pixel_val: List[float] = None,
+        **kwargs
+):
+    """Applies random transformations to input B-mode image.
+
+    Possible transforms include random crop & resize, contrast
+    change, and horizontal flip. Used in supervised learning evaluation settings.
+    :param crop_prob: Probability of random crop and resize
+    :param reflect_prob: Probability of horizontal reflection augmentation
+    :param brightness_contrast_prob: Probability of applying brightness/contrast augmentation
+    :param mean_pixel_val: Channel-wise means
+    :param std_pixel_val: Channel-wise standard deviation
+    :return: Callable augmentation pipeline
+    """
+    transforms = [
+        v2.RandomApply([v2.RandomResizedCrop((height, width), scale=(min_crop, 1.), antialias=True)], p=crop_prob),
+        v2.RandomHorizontalFlip(p=reflect_prob),
+        v2.RandomApply([v2.ColorJitter(0.2, 0.2, 0., 0.)], p=brightness_contrast_prob),
+        v2.ToDtype(torch.float32, scale=True),
+        get_normalize_transform(mean_pixel_val, std_pixel_val)
+    ]
+    if resize:
+        transforms.insert(0, v2.Resize((height, width)))
+    return v2.Compose(transforms)
+
+
+def get_supervised_augmentations_obj_det(
         height: int,
         width: int,
         crop_prob: float = 0.5,

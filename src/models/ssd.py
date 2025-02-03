@@ -88,7 +88,7 @@ class SSDLite(pl.LightningModule):
         """
 
         super().__init__()
-        self.save_hyperparameters(ignore=['extractor'])
+        self.save_hyperparameters()
 
         self.frozen_backbone = frozen_backbone
         norm_layer = partial(nn.BatchNorm2d, eps=0.001, momentum=0.03)
@@ -100,7 +100,7 @@ class SSDLite(pl.LightningModule):
         ).cuda()
 
         size = input_shape[1:3]
-        anchor_generator = PLBoxGenerator([[2, 3, 4, 5] for _ in range(6)], min_ratio=0.01, max_ratio=0.3)
+        anchor_generator = PLBoxGenerator([[2, 3, 4, 5] for _ in range(6)], min_ratio=0.0028, max_ratio=0.15) #max_ratio=0.015)
         out_channels = det_utils.retrieve_out_channels(backbone, size)
         num_anchors = anchor_generator.num_anchors_per_location()
         head = SSDLiteHead(out_channels, num_anchors, num_classes, norm_layer)
@@ -116,7 +116,7 @@ class SSDLite(pl.LightningModule):
             nms_thresh=0.45,
             score_thresh=0.01,
             topk_candidates=400,
-            positive_fraction=0.1,
+            positive_fraction=0.05,
             detections_per_img=200
         )
         

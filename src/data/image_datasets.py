@@ -209,7 +209,7 @@ def get_augmentation_transforms(
     :param pipeline: Name of pipeline.
                      One of {'byol_original', 'byol_symmetrized', 'byol_grayscale',
                       'august_original', 'august_refined', 'august_distilled', 'crop_only',
-                      'supervised', or 'none'}
+                      'supervised_cls', 'supervised_obj_det', or 'none'}
     :param height: Image height
     :param width: Image width
     :param pipeline_kwargs: Pipeline keyword arguments
@@ -230,8 +230,10 @@ def get_augmentation_transforms(
         return get_august_distilled_augmentations(height, width, resize=resize, exclude_idx=exclude_idx, **augment_kwargs)
     elif pipeline == "crop_only":
         return get_crop_only_augmentations(height, width, resize=resize, exclude_idx=exclude_idx, **augment_kwargs)
-    elif pipeline == "supervised":
-        return get_supervised_augmentations(height, width, resize=resize, **augment_kwargs)
+    elif pipeline == "supervised_cls":
+        return get_supervised_augmentations_cls(height, width, resize=resize, **augment_kwargs)
+    elif pipeline == "supervised_obj_det":
+        return get_supervised_augmentations_obj_det(height, width, resize=resize, **augment_kwargs)
     else:
         if pipeline != "none":
             print(f"Unrecognized augmentation pipeline: {pipeline}.\n"
@@ -327,7 +329,7 @@ def prepare_train_dataloader(
         batch_size: int,
         width: int,
         height: int,
-        augment_pipeline: str = "supervised",
+        augment_pipeline: str = "supervised_cls",
         shuffle: bool = True,
         n_workers: int = 0,
         drop_last: bool = False,
@@ -537,7 +539,7 @@ def load_data_for_train(
         height: int,
         splits_dir: str,
         batch_size: int,
-        augment_pipeline: str = "supervised",
+        augment_pipeline: str = "supervised_cls",
         n_train_workers: int = 0,
         n_val_workers: int = 0,
         n_test_workers: int = 0,
@@ -581,6 +583,8 @@ def load_data_for_train(
         train_pool_frames_df = pd.DataFrame()
         train_pool_clips_df = pd.DataFrame()
     if train_clips is None:
+        if label_name == 'pl_label':
+            train_pool_frames_df['pl_label'] = train_pool_frames_df['pl_label'].astype(str)
         train_clips_df = train_pool_clips_df.loc[train_pool_clips_df[label_name] != unl_val]
         train_frames_df = train_pool_frames_df.loc[train_pool_frames_df[label_name] != unl_val]
     else:
@@ -599,6 +603,8 @@ def load_data_for_train(
     else:
         val_frames_df = pd.DataFrame()
         val_clips_df = pd.DataFrame()
+    if label_name == 'pl_label':
+        val_frames_df['pl_label'] = val_frames_df['pl_label'].astype(str)
     val_clips_df = val_clips_df.loc[val_clips_df[label_name] != unl_val]
     val_frames_df = val_frames_df.loc[val_frames_df[label_name] != unl_val]
     print("Validation clips:\n", val_clips_df.describe())
@@ -622,6 +628,8 @@ def load_data_for_train(
         else:
             test_frames_df = pd.DataFrame()
             test_clips_df = pd.DataFrame()
+    if label_name == 'pl_label':
+        test_frames_df['pl_label'] = test_frames_df['pl_label'].astype(str)
     test_clips_df = test_clips_df.loc[test_clips_df[label_name] != unl_val]
     test_frames_df = test_frames_df.loc[test_frames_df[label_name] != unl_val]
     print("Test clips:\n", test_clips_df.describe())

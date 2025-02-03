@@ -113,7 +113,10 @@ def train(
 
     else:
         # Define new model using a checkpoint
-        epochs = cfg['train']['epochs']
+        if args['epochs'] is not None:
+            epochs = args['epochs']
+        else:
+            epochs = cfg['train']['epochs']
         batches_per_epoch = len(train_loader)
 
         # Create feature extractor
