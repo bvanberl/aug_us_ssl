@@ -139,7 +139,10 @@ def train(
                 epochs,
                 cfg['train']['weight_decay'],
                 bool(cfg['train']['linear']),
-                world_size
+                world_size,
+                min_ratio=cfg['train']['obj_det']['min_ratio'],
+                max_ratio=cfg['train']['obj_det']['max_ratio'],
+                aspect_ratios=cfg['train']['obj_det']['aspect_ratios']
             )
         else:
             model = Classifier(

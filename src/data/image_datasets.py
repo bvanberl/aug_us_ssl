@@ -539,7 +539,7 @@ def load_data_for_train(
         height: int,
         splits_dir: str,
         batch_size: int,
-        augment_pipeline: str = "supervised_cls",
+        augment_pipeline: str = "supervised",
         n_train_workers: int = 0,
         n_val_workers: int = 0,
         n_test_workers: int = 0,

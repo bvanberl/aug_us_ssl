@@ -100,7 +100,10 @@ class SSDLite(pl.LightningModule):
             frozen_backbone: bool = False,
             world_size: int = 1,
             train_metric_freq: int = 100,
-            map_iou_threshold: float = 0.5
+            map_iou_threshold: float = 0.5,
+            min_ratio: float = 0.1,
+            max_ratio: float = 0.6,
+            aspect_ratios: Optional[List[int]] = None
         ):
         """
         Args:
@@ -118,15 +121,13 @@ class SSDLite(pl.LightningModule):
         self.frozen_backbone = frozen_backbone
         norm_layer = partial(nn.BatchNorm2d, eps=0.001, momentum=0.03)
 
-        # backbone = _mobilenet_extractor(
-        #     extractor,
-        #     0 if self.frozen_backbone else 6,
-        #     norm_layer,
-        # ).cuda()
         backbone = SSDLiteMobileNetWrapper(extractor, [1, 3, 6, 9, 12])
 
         size = input_shape[1:3]
-        anchor_generator = PLBoxGenerator([[2, 3, 4, 5] for _ in range(6)], min_ratio=0.0028, max_ratio=0.15) #max_ratio=0.015)
+        if aspect_ratios is None:
+            aspect_ratios = [0.5, 0.75, 1.333, 2.0]
+        
+        anchor_generator = PLBoxGenerator([aspect_ratios for _ in range(6)], min_ratio=min_ratio, max_ratio=max_ratio)
         out_channels = det_utils.retrieve_out_channels(backbone, size)
         num_anchors = anchor_generator.num_anchors_per_location()
         head = SSDLiteHead(out_channels, num_anchors, num_classes, norm_layer)
@@ -138,12 +139,7 @@ class SSDLite(pl.LightningModule):
             num_classes=num_classes,
             head=head,
             image_mean=[0., 0., 0.],    # Augmentation pipelines perform normalization
-            image_std=[1., 1., 1.],
-            nms_thresh=0.45,
-            score_thresh=0.01,
-            topk_candidates=400,
-            positive_fraction=0.25,
-            detections_per_img=200
+            image_std=[1., 1., 1.]
         )
         
         self.input_shape = input_shape
