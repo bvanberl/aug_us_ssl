@@ -122,6 +122,10 @@ class SSDLite(pl.LightningModule):
         norm_layer = partial(nn.BatchNorm2d, eps=0.001, momentum=0.03)
 
         backbone = SSDLiteMobileNetWrapper(extractor, [1, 3, 6, 9, 12])
+        if self.frozen_backbone:
+            print("Training SSD with frozen backbone.")
+            backbone.requires_grad_(False)
+            backbone.eval()
 
         size = input_shape[1:3]
         if aspect_ratios is None:
