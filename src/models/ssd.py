@@ -154,9 +154,9 @@ class SSDLite(pl.LightningModule):
         self.distributed = world_size > 1
         self.train_metric_freq = train_metric_freq
 
-        self.train_map_metric = tm.detection.mean_ap.MeanAveragePrecision(iou_thresholds=[map_iou_threshold])
-        self.val_map_metric = tm.detection.mean_ap.MeanAveragePrecision(iou_thresholds=[map_iou_threshold])
-        self.test_map_metric = tm.detection.mean_ap.MeanAveragePrecision(iou_thresholds=[map_iou_threshold])
+        self.train_map_metric = tm.detection.mean_ap.MeanAveragePrecision(iou_thresholds=[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7])
+        self.val_map_metric = tm.detection.mean_ap.MeanAveragePrecision(iou_thresholds=[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7])
+        self.test_map_metric = tm.detection.mean_ap.MeanAveragePrecision(iou_thresholds=[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7])
         
     def forward(self, images, targets=None):
         return self.model(images, targets)
@@ -179,8 +179,10 @@ class SSDLite(pl.LightningModule):
 
     def on_train_epoch_end(self):
         map_dict = self.train_map_metric.compute()
-        self.log("train/mAP", map_dict['map'], prog_bar=True, on_epoch=True, sync_dist=self.distributed)
-        self.log("train/mAP@50", map_dict['map_50'], prog_bar=True, on_epoch=True, sync_dist=self.distributed)
+        #self.log("train/mAP", map_dict['map'], prog_bar=True, on_epoch=True, sync_dist=self.distributed)
+        for k in map_dict:
+            self.log(f"train/{k}", map_dict[k], prog_bar=True, on_epoch=True, sync_dist=self.distributed)
+        #self.log("train/mAP@50", map_dict['map_50'], prog_bar=True, on_epoch=True, sync_dist=self.distributed)
         self.train_map_metric.reset()
         
     def validation_step(self, batch, batch_idx):
@@ -202,8 +204,11 @@ class SSDLite(pl.LightningModule):
 
     def on_validation_epoch_end(self):
         map_dict = self.val_map_metric.compute()
-        self.log("val/mAP", map_dict['map'], prog_bar=True, on_epoch=True, sync_dist=self.distributed)
-        self.log("val/mAP@50", map_dict['map_50'], prog_bar=True, on_epoch=True, sync_dist=self.distributed)
+        print(map_dict)
+        #self.log("val/mAP", map_dict['map'], prog_bar=True, on_epoch=True, sync_dist=self.distributed)
+        #self.log("val/mAP@50", map_dict['map_50'], prog_bar=True, on_epoch=True, sync_dist=self.distributed)
+        for k in map_dict:
+            self.log(f"val/{k}", map_dict[k], prog_bar=True, on_epoch=True, sync_dist=self.distributed)
         self.val_map_metric.reset()
     
     def test_step(self, batch, batch_idx):
@@ -225,8 +230,10 @@ class SSDLite(pl.LightningModule):
 
     def on_test_epoch_end(self):
         map_dict = self.test_map_metric.compute()
-        self.log("test/mAP", map_dict['map'], prog_bar=True, on_epoch=True, sync_dist=self.distributed)
-        self.log("test/mAP@50", map_dict['map_50'], prog_bar=True, on_epoch=True, sync_dist=self.distributed)
+        # self.log("test/mAP", map_dict['map'], prog_bar=True, on_epoch=True, sync_dist=self.distributed)
+        # self.log("test/mAP@50", map_dict['map_50'], prog_bar=True, on_epoch=True, sync_dist=self.distributed)
+        for k in map_dict:
+            self.log(f"test/{k}", map_dict[k], prog_bar=True, on_epoch=True, sync_dist=self.distributed)
         self.test_map_metric.reset()
 
     def configure_optimizers(self):

@@ -37,6 +37,7 @@ pretrain:
         min_crop: 0.08
         min_ratio: 0.75
         max_ratio: 1.33333333333
+        convert_all_to_linear: true
     barlow_twins:
       lambda_: 0.005
     vicreg:

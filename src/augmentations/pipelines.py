@@ -34,7 +34,10 @@ def get_validation_scaling(
         width: int,
         resize: bool = True,
         mean_pixel_val: List[float] = None,
-        std_pixel_val: List[float] = None
+        std_pixel_val: List[float] = None,
+        square_roi: bool = False,
+        convert_all_to_linear: bool = False,
+        **kwargs
 ) -> v2.Compose:
     """Defines augmentation pipeline for supervised learning experiments.
     :param gray_to_rgb: If True, convert grayscale inputs to 3-channel RGB
@@ -46,6 +49,8 @@ def get_validation_scaling(
         v2.ToDtype(torch.float32, scale=True),
         get_normalize_transform(mean_pixel_val, std_pixel_val)
     ]
+    if convert_all_to_linear:
+        transforms.insert(0, ProbeTypeChange(square_roi=square_roi, min_linear_width_frac=1.0, max_linear_width_frac=1.0, pass_through='linear'))
     if resize:
         transforms.insert(0, v2.Resize((height, width)))
     return v2.Compose(transforms)
@@ -58,7 +63,10 @@ def get_original_byol_augmentations(
         mean_pixel_val: List[float] = None,
         std_pixel_val: List[float] = None,
         exclude_idx: int = -1,
-        prime: bool = False
+        prime: bool = False,
+        square_roi: bool = False,
+        convert_all_to_linear: bool = False,
+        **kwargs
 ) -> v2.Compose:
     """
     Applies random data transformations according to the data augmentations
@@ -95,6 +103,8 @@ def get_original_byol_augmentations(
     ]
     if exclude_idx > -1:
         transforms.pop(exclude_idx)     # Leave out one transformation
+    if convert_all_to_linear:
+        transforms.insert(0, ProbeTypeChange(square_roi=square_roi, min_linear_width_frac=1.0, max_linear_width_frac=1.0, pass_through='linear'))
     if resize:
         transforms.insert(0, v2.Resize((height, width)))
     return v2.Compose(transforms)
@@ -106,6 +116,9 @@ def get_symmetrized_byol_augmentations(
         mean_pixel_val: List[float] = None,
         std_pixel_val: List[float] = None,
         exclude_idx: int = -1,
+        square_roi: bool = False,
+        convert_all_to_linear: bool = False,
+        **kwargs
 ) -> v2.Compose:
     """
     Applies random data transformations according to the data augmentations
@@ -135,6 +148,8 @@ def get_symmetrized_byol_augmentations(
     ]
     if exclude_idx > -1:
         transforms.pop(exclude_idx)     # Leave out one transformation
+    if convert_all_to_linear:
+        transforms.insert(0, ProbeTypeChange(square_roi=square_roi, min_linear_width_frac=1.0, max_linear_width_frac=1.0, pass_through='linear'))
     if resize:
         transforms.insert(0, v2.Resize((height, width)))
     return v2.Compose(transforms)
@@ -146,7 +161,10 @@ def get_grayscale_byol_augmentations(
         resize: bool = True,
         mean_pixel_val: List[float] = None,
         std_pixel_val: List[float] = None,
-        exclude_idx: int = -1
+        exclude_idx: int = -1,
+        square_roi: bool = False,
+        convert_all_to_linear: bool = False,
+        **kwargs
 ) -> v2.Compose:
     """
     Applies random data transformations according to the data augmentations
@@ -175,6 +193,8 @@ def get_grayscale_byol_augmentations(
     ]
     if exclude_idx > -1:
         transforms.pop(exclude_idx)     # Leave out one transformation
+    if convert_all_to_linear:
+        transforms.insert(0, ProbeTypeChange(square_roi=square_roi, min_linear_width_frac=1.0, max_linear_width_frac=1.0, pass_through='linear'))
     if resize:
         transforms.insert(0, v2.Resize((height, width)))
     return v2.Compose(transforms)
@@ -199,7 +219,9 @@ def get_august_original_augmentations(
         mean_pixel_val: List[float] = None,
         std_pixel_val: List[float] = None,
         exclude_idx: int = -1,
-        square_roi: bool = False
+        square_roi: bool = False,
+        convert_all_to_linear: bool = False,
+        **kwargs
 ):
     """Applies random transformations to input B-mode image.
 
@@ -269,6 +291,10 @@ def get_august_original_augmentations(
     ]
     if exclude_idx > -1:
         transforms.pop(exclude_idx)     # Leave out one transformation
+    elif convert_all_to_linear:
+        transforms.pop(0)  # Remove probe type change
+        transforms.pop(0)  # Remove convexity change
+        transforms.insert(0, ProbeTypeChange(square_roi=square_roi, min_linear_width_frac=1.0, max_linear_width_frac=1.0, pass_through='linear'))
     if resize:
         transforms.insert(2, ResizeKeypoint(size=[height, width]))
     return v2.Compose(transforms)
@@ -333,6 +359,8 @@ def get_august_refined_augmentations(
     ]
     if exclude_idx > -1:
         transforms.pop(exclude_idx)     # Leave out one transformation
+    if convert_all_to_linear:
+        transforms.insert(0, ProbeTypeChange(square_roi=square_roi, min_linear_width_frac=1.0, max_linear_width_frac=1.0, pass_through='linear'))
     if resize:
         transforms.insert(2, ResizeKeypoint(size=[height, width]))
     print(f"TRANSFORMS: {transforms}")
@@ -353,6 +381,8 @@ def get_august_distilled_augmentations(
         mean_pixel_val: List[float] = None,
         std_pixel_val: List[float] = None,
         exclude_idx: int = -1,
+        square_roi: bool = False,
+        convert_all_to_linear: bool = False,
         **kwargs
 ):
     """Applies random transformations to input B-mode image from the distilled pipeline.
@@ -382,6 +412,8 @@ def get_august_distilled_augmentations(
     ]
     if exclude_idx > -1:
         transforms.pop(exclude_idx)     # Leave out one transformation
+    if convert_all_to_linear:
+        transforms.insert(0, ProbeTypeChange(square_roi=square_roi, min_linear_width_frac=1.0, max_linear_width_frac=1.0, pass_through='linear'))
     if resize:
         transforms.insert(0, ResizeKeypoint(size=[height, width]))
     print(f"TRANSFORMS: {transforms}")
@@ -390,90 +422,8 @@ def get_august_distilled_augmentations(
     print(f"MAX RATIO: {max_ratio}")
     return v2.Compose(transforms)
 
-def get_crop_only_augmentations(
-        height: int,
-        width: int,
-        crop_prob: float = 1.0,
-        min_crop: float = 0.08,
-        min_ratio: float = 0.75,
-        max_ratio: float = 4.0 / 3.0,
-        resize: bool = True,
-        mean_pixel_val: List[float] = None,
-        std_pixel_val: List[float] = None,
-        exclude_idx: int = -1,
-        **kwargs
-):
-    """Applies random transformations to input B-mode image from the distilled pipeline.
-
-    :param brightness_contrast_prob: Probability of applying brightness/contrast augmentation
-    :param gaussian_prob: Probability of applying Gaussian noise augmentation
-    :param sp_prob: Probability of applying salt & pepper noise augmentation
-    :param reflect_prob: Probability of horizontal reflection augmentation
-    :param shift_rotate_prob: Probability of random shift and rotation augmentation
-    :param crop_prob: Probability of applying random crop and resize augmentation
-    :param mean_pixel_val: Channel-wise means
-    :param std_pixel_val: Channel-wise standard deviation
-    :param exclude_idx: If not -1, the index of a transform to exclude.
-                        Used for augmentation ablations.
-    :return: Callable augmentation pipeline
-    """
-    transforms = [
-        v2.RandomApply([v2.RandomResizedCrop((height, width), scale=(min_crop, 1.), ratio=(min_ratio, max_ratio), antialias=True, interpolation=InterpolationMode.BICUBIC)], p=crop_prob),
-        v2.ToDtype(torch.float32, scale=True),
-        get_normalize_transform(mean_pixel_val, std_pixel_val)
-    ]
-    if exclude_idx > -1:
-        transforms.pop(exclude_idx)     # Leave out one transformation
-    if resize:
-        transforms.insert(0, v2.Resize(size=[height, width]))
-    print(f"TRANSFORMS: {transforms}")
-    print(f"MIN CROP: {min_crop}")
-    print(f"MIN RAIO: {min_ratio}")
-    print(f"MAX RATIO: {max_ratio}")
-    return v2.Compose(transforms)
-
 
 def get_crop_only_augmentations(
-        height: int,
-        width: int,
-        crop_prob: float = 1.0,
-        min_crop: float = 0.08,
-        min_ratio: float = 0.75,
-        max_ratio: float = 4.0 / 3.0,
-        resize: bool = True,
-        mean_pixel_val: List[float] = None,
-        std_pixel_val: List[float] = None,
-        **kwargs
-):
-    """Applies random transformations to input B-mode image from the distilled pipeline.
-
-    :param brightness_contrast_prob: Probability of applying brightness/contrast augmentation
-    :param gaussian_prob: Probability of applying Gaussian noise augmentation
-    :param sp_prob: Probability of applying salt & pepper noise augmentation
-    :param reflect_prob: Probability of horizontal reflection augmentation
-    :param shift_rotate_prob: Probability of random shift and rotation augmentation
-    :param crop_prob: Probability of applying random crop and resize augmentation
-    :param mean_pixel_val: Channel-wise means
-    :param std_pixel_val: Channel-wise standard deviation
-    :param exclude_idx: If not -1, the index of a transform to exclude.
-                        Used for augmentation ablations.
-    :return: Callable augmentation pipeline
-    """
-    transforms = [
-        v2.RandomApply([v2.RandomResizedCrop((height, width), scale=(min_crop, 1.), ratio=(min_ratio, max_ratio), antialias=True, interpolation=InterpolationMode.BICUBIC)], p=crop_prob),
-        v2.ToDtype(torch.float32, scale=True),
-        get_normalize_transform(mean_pixel_val, std_pixel_val)
-    ]
-    if resize:
-        transforms.insert(0, v2.Resize(size=[height, width]))
-    print(f"TRANSFORMS: {transforms}")
-    print(f"MIN CROP: {min_crop}")
-    print(f"MIN RAIO: {min_ratio}")
-    print(f"MAX RATIO: {max_ratio}")
-    return v2.Compose(transforms)
-
-
-def get_linear_crop_augmentations(
         height: int,
         width: int,
         crop_prob: float = 1.0,
@@ -484,10 +434,10 @@ def get_linear_crop_augmentations(
         mean_pixel_val: List[float] = None,
         std_pixel_val: List[float] = None,
         square_roi: bool = False,
+        convert_all_to_linear: bool = False,
         **kwargs
 ):
-    """Converts phased array and curved linear probe types to linear; keeps linear probes
-    unchanged. Then applies random crop and resize.
+    """Applies random transformations to input B-mode image from the distilled pipeline.
 
     :param brightness_contrast_prob: Probability of applying brightness/contrast augmentation
     :param gaussian_prob: Probability of applying Gaussian noise augmentation
@@ -502,11 +452,12 @@ def get_linear_crop_augmentations(
     :return: Callable augmentation pipeline
     """
     transforms = [
-        ProbeTypeChange(square_roi=square_roi, min_linear_width_frac=0.5, max_linear_width_frac=1.0, pass_through='linear'),
         v2.RandomApply([v2.RandomResizedCrop((height, width), scale=(min_crop, 1.), ratio=(min_ratio, max_ratio), antialias=True, interpolation=InterpolationMode.BICUBIC)], p=crop_prob),
         v2.ToDtype(torch.float32, scale=True),
         get_normalize_transform(mean_pixel_val, std_pixel_val)
     ]
+    if convert_all_to_linear:
+        transforms.insert(0, ProbeTypeChange(square_roi=square_roi, min_linear_width_frac=1.0, max_linear_width_frac=1.0, pass_through='linear'))
     if resize:
         transforms.insert(0, v2.Resize(size=[height, width]))
     print(f"TRANSFORMS: {transforms}")
@@ -514,7 +465,6 @@ def get_linear_crop_augmentations(
     print(f"MIN RAIO: {min_ratio}")
     print(f"MAX RATIO: {max_ratio}")
     return v2.Compose(transforms)
-
 
 
 def get_supervised_augmentations_cls(
@@ -527,6 +477,8 @@ def get_supervised_augmentations_cls(
         resize: bool = True,
         mean_pixel_val: List[float] = None,
         std_pixel_val: List[float] = None,
+        square_roi: bool = False,
+        convert_all_to_linear: bool = False,
         **kwargs
 ):
     """Applies random transformations to input B-mode image.
@@ -547,6 +499,8 @@ def get_supervised_augmentations_cls(
         v2.ToDtype(torch.float32, scale=True),
         get_normalize_transform(mean_pixel_val, std_pixel_val)
     ]
+    if convert_all_to_linear:
+        transforms.insert(0, ProbeTypeChange(square_roi=square_roi, min_linear_width_frac=1.0, max_linear_width_frac=1.0, pass_through='linear'))
     if resize:
         transforms.insert(0, v2.Resize((height, width)))
     return v2.Compose(transforms)

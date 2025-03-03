@@ -118,12 +118,20 @@ class ImageClassificationDataset(Dataset):
             self.image_paths[idx]
         )
         x = read_image(image_path).to(self.device)
+        
+        # Load label
+        y = self.labels[idx]
+        
+        # Load ancillary inputs
+        mask_path = os.path.join(self.mask_root_dir, self.mask_paths[idx])
+        mask = read_image(mask_path).to(self.device)
+        keypoints = torch.tensor(self.keypoints[idx], device=self.device)
+        probe_type = torch.tensor(self.probe_types[idx], device=self.device)
 
         # Apply data augmentation transforms
         if self.transforms:
-            x = self.transforms(x)
+            x = self.transforms(x, y, keypoints, mask, probe_type)
 
-        y = self.labels[idx]
         return x, y
 
 
@@ -208,7 +216,7 @@ def get_augmentation_transforms(
 
     :param pipeline: Name of pipeline.
                      One of {'byol_original', 'byol_symmetrized', 'byol_grayscale',
-                      'august_original', 'august_refined', 'august_distilled', 'crop_only', 'linear_crop_only'
+                      'august_original', 'august_refined', 'august_distilled', 'crop_only', 
                       'supervised_cls', 'supervised_obj_det', or 'none'}
     :param height: Image height
     :param width: Image width
@@ -217,30 +225,28 @@ def get_augmentation_transforms(
     """
     pipeline = pipeline.lower()
     if pipeline == "byol_original":
-        return get_original_byol_augmentations(height, width, resize=resize, exclude_idx=exclude_idx, prime=prime)
+        return get_original_byol_augmentations(height, width, resize=resize, exclude_idx=exclude_idx, prime=prime, square_roi=square_roi, **augment_kwargs)
     if pipeline == "byol_symmetrized":
-        return get_symmetrized_byol_augmentations(height, width, resize=resize, exclude_idx=exclude_idx)
+        return get_symmetrized_byol_augmentations(height, width, resize=resize, exclude_idx=exclude_idx, square_roi=square_roi, **augment_kwargs)
     if pipeline == "byol_grayscale":
-        return get_grayscale_byol_augmentations(height, width, resize=resize, exclude_idx=exclude_idx)
+        return get_grayscale_byol_augmentations(height, width, resize=resize, exclude_idx=exclude_idx, square_roi=square_roi, **augment_kwargs)
     elif pipeline == "august_original":
         return get_august_original_augmentations(height, width, resize=resize, exclude_idx=exclude_idx, square_roi=square_roi, **augment_kwargs)
     elif pipeline == "august_refined":
         return get_august_refined_augmentations(height, width, resize=resize, exclude_idx=exclude_idx, square_roi=square_roi, **augment_kwargs)
     elif pipeline == "august_distilled":
-        return get_august_distilled_augmentations(height, width, resize=resize, exclude_idx=exclude_idx, **augment_kwargs)
+        return get_august_distilled_augmentations(height, width, resize=resize, exclude_idx=exclude_idx, square_roi=square_roi, **augment_kwargs)
     elif pipeline == "crop_only":
-        return get_crop_only_augmentations(height, width, resize=resize, exclude_idx=exclude_idx, **augment_kwargs)
-    elif pipeline == "linear_crop_only":
-        return get_linear_crop_augmentations(height, width, resize=resize, exclude_idx=exclude_idx, **augment_kwargs)
+        return get_crop_only_augmentations(height, width, resize=resize, exclude_idx=exclude_idx, square_roi=square_roi, **augment_kwargs)
     elif pipeline == "supervised_cls":
-        return get_supervised_augmentations_cls(height, width, resize=resize, **augment_kwargs)
+        return get_supervised_augmentations_cls(height, width, resize=resize, square_roi=square_roi, **augment_kwargs)
     elif pipeline == "supervised_obj_det":
         return get_supervised_augmentations_obj_det(height, width, resize=resize, **augment_kwargs)
     else:
         if pipeline != "none":
             print(f"Unrecognized augmentation pipeline: {pipeline}.\n"
                             f"No augmentations will be applied.")
-        return get_validation_scaling(height, width, resize=resize)
+        return get_validation_scaling(height, width, resize=resize, square_roi=square_roi, **augment_kwargs)
 
 
 def prepare_pretrain_dataloader(
