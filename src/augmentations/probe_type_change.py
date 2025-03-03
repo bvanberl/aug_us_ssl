@@ -1,3 +1,5 @@
+from typing import Optional
+
 import torch
 from torch import nn, Tensor
 from torchvision.transforms.v2 import functional as tvf, Transform
@@ -23,6 +25,7 @@ class ProbeTypeChange(nn.Module):
             max_linear_width_frac: float = 0.6,
             min_convex_rad_factor: float = 1.0,
             max_convex_rad_factor: float = 2.0,
+            pass_through: Optional[str] = None
     ):
         """Initializes the NonLinearToLinear layer.
 
@@ -33,10 +36,19 @@ class ProbeTypeChange(nn.Module):
                 beam width, as a fraction of original beam's width
             max_linear_width_frac: The maximum possible width of a linear output image's
                 beam width, as a fraction of original beam's width
+            min_convex_rad_factor: The minimum possible radius for a convex beam as a multiple
+                of the height of a linear beam shape
+            max_convex_rad_factor: The maximum possible radius for a convex beam as a multiple
+                of the height of a linear beam shape
+            pass_through: Probe geometry that will be left unaltered when encountered. One of
+                `linear` or `convex`
+
         """
 
         assert 0. < min_linear_width_frac <= max_linear_width_frac <= 1., "Min and max linear frac must be in [0, 1]"
         assert 1. <= min_convex_rad_factor <= max_convex_rad_factor, "Convex rad factors must be >= 1"
+        if pass_through is not None:
+            assert pass_through.lower() in ['linear', 'convex'], "`pass_through` must be 'linear' or 'convex'"
 
         super(ProbeTypeChange, self).__init__()
         self.square_roi = square_roi
@@ -44,6 +56,7 @@ class ProbeTypeChange(nn.Module):
         self.max_linear_width_frac = max_linear_width_frac
         self.min_convex_rad_factor = min_convex_rad_factor
         self.max_convex_rad_factor = max_convex_rad_factor
+        self.pass_through = pass_through
 
     def forward(
             self,
@@ -81,6 +94,9 @@ class ProbeTypeChange(nn.Module):
 
         if probe == Probe.LINEAR.value:
 
+            if self.pass_through == 'linear':
+                return image, label, keypoints, mask, Probe.LINEAR.value
+
             # Sample random radius for curved linear beam
             rad_factor = self.min_convex_rad_factor + \
                          torch.rand(()) * (self.max_convex_rad_factor - self.min_convex_rad_factor)
@@ -115,6 +131,9 @@ class ProbeTypeChange(nn.Module):
             return new_image, label, new_keypoints, new_mask, Probe.CURVED_LINEAR.value
 
         else:
+
+            if self.pass_through == 'convex':
+                return image, label, keypoints, mask, probe
 
             # Get point of intersection of left and right beam bounds
             x_itn, y_itn = get_point_of_intersection(*keypoints)

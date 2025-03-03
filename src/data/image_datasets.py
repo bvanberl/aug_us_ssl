@@ -208,7 +208,7 @@ def get_augmentation_transforms(
 
     :param pipeline: Name of pipeline.
                      One of {'byol_original', 'byol_symmetrized', 'byol_grayscale',
-                      'august_original', 'august_refined', 'august_distilled', 'crop_only',
+                      'august_original', 'august_refined', 'august_distilled', 'crop_only', 'linear_crop_only'
                       'supervised_cls', 'supervised_obj_det', or 'none'}
     :param height: Image height
     :param width: Image width
@@ -230,6 +230,8 @@ def get_augmentation_transforms(
         return get_august_distilled_augmentations(height, width, resize=resize, exclude_idx=exclude_idx, **augment_kwargs)
     elif pipeline == "crop_only":
         return get_crop_only_augmentations(height, width, resize=resize, exclude_idx=exclude_idx, **augment_kwargs)
+    elif pipeline == "linear_crop_only":
+        return get_linear_crop_augmentations(height, width, resize=resize, exclude_idx=exclude_idx, **augment_kwargs)
     elif pipeline == "supervised_cls":
         return get_supervised_augmentations_cls(height, width, resize=resize, **augment_kwargs)
     elif pipeline == "supervised_obj_det":
