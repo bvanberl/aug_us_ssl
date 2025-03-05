@@ -51,7 +51,9 @@ def get_validation_scaling(
     ]
     if convert_all_to_linear:
         transforms.insert(0, ProbeTypeChange(square_roi=square_roi, min_linear_width_frac=1.0, max_linear_width_frac=1.0, pass_through='linear'))
-    if resize:
+        if resize:
+            transforms.insert(1, ResizeKeypoint((height, width)))
+    elif resize:
         transforms.insert(0, v2.Resize((height, width)))
     return v2.Compose(transforms)
 
@@ -317,7 +319,8 @@ def get_august_refined_augmentations(
         mean_pixel_val: List[float] = None,
         std_pixel_val: List[float] = None,
         exclude_idx: int = -1,
-        square_roi: bool = False
+        square_roi: bool = False,
+        convert_all_to_linear: bool = False
 ):
     """Applies random transformations to input B-mode image.
 
@@ -459,7 +462,7 @@ def get_crop_only_augmentations(
     if convert_all_to_linear:
         transforms.insert(0, ProbeTypeChange(square_roi=square_roi, min_linear_width_frac=1.0, max_linear_width_frac=1.0, pass_through='linear'))
     if resize:
-        transforms.insert(0, v2.Resize(size=[height, width]))
+        transforms.insert(0, ResizeKeypoint(size=[height, width]))
     print(f"TRANSFORMS: {transforms}")
     print(f"MIN CROP: {min_crop}")
     print(f"MIN RAIO: {min_ratio}")
@@ -501,7 +504,9 @@ def get_supervised_augmentations_cls(
     ]
     if convert_all_to_linear:
         transforms.insert(0, ProbeTypeChange(square_roi=square_roi, min_linear_width_frac=1.0, max_linear_width_frac=1.0, pass_through='linear'))
-    if resize:
+        if resize:
+            transforms.insert(1, ResizeKeypoint(size=[height, width]))
+    elif resize:
         transforms.insert(0, v2.Resize((height, width)))
     print(f"TRANSFORMS: {transforms}")
     return v2.Compose(transforms)

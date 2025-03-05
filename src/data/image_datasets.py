@@ -183,7 +183,7 @@ class ImageClassificationDatasetWithMasks(Dataset):
 
         # Apply data augmentation transforms
         if self.transforms:
-            x = self.transforms(x, y, keypoints, mask, probe_type)
+            x = self.transforms(x, y, keypoints, mask, probe_type)[0]
 
         return x, y
 
@@ -395,6 +395,7 @@ def prepare_train_dataloader(
         n_workers: int = 0,
         drop_last: bool = False,
         resize: bool = True,
+        square_roi: bool = True,
         mask_dir: Optional[str] = None,
         **preprocess_kwargs
 ) -> DataLoader:
@@ -422,6 +423,7 @@ def prepare_train_dataloader(
         augment_pipeline,
         height,
         width,
+        square_roi=square_roi,
         resize=resize,
         **preprocess_kwargs
     )
@@ -619,6 +621,7 @@ def load_data_for_train(
         train_clips: pd.DataFrame = None,
         k_fold_test_clips: pd.DataFrame = None,
         mask_dir: Optional[str] = None,
+        square_roi: bool = True,
         convert_all_to_linear: bool = False,
         **preprocess_kwargs
 ) -> (DataLoader, DataLoader, DataLoader):
@@ -744,6 +747,7 @@ def load_data_for_train(
         drop_last=True,
         resize=resize,
         mask_dir=mask_dir,
+        square_roi=square_roi,
         convert_all_to_linear=convert_all_to_linear,
         **preprocess_kwargs
     )
@@ -762,6 +766,7 @@ def load_data_for_train(
             drop_last=False,
             resize=resize,
             mask_dir=mask_dir,
+            square_roi=square_roi,
             convert_all_to_linear=convert_all_to_linear,
             **preprocess_kwargs
         )
@@ -783,6 +788,7 @@ def load_data_for_train(
             drop_last=False,
             resize=resize,
             mask_dir=mask_dir,
+            square_roi=square_roi,
             convert_all_to_linear=convert_all_to_linear,
             **preprocess_kwargs
         )

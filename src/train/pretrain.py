@@ -94,7 +94,7 @@ if __name__ == '__main__':
     batch_size = cfg['pretrain']['batch_size']
     resize = bool(cfg['data']['resize'])
     exclude_idx = cfg['pretrain']['exclude_idx']
-    square_roi = bool(cfg['pretrain']['square_roi'])
+    square_roi = args['square_roi'] if args['square_roi'] else bool(cfg['pretrain']['square_roi'])
     use_unlabelled = args['use_unlabelled'] if args['use_unlabelled'] is not None else cfg['pretrain']['use_unlabelled']
     use_labelled = args['use_labelled'] if args['use_labelled'] is not None else cfg['pretrain']['use_labelled']
 

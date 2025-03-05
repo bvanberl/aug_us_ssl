@@ -42,6 +42,7 @@ def train(
     image_dir = args['image_dir'] if args['image_dir'] else cfg["paths"]["images"]
     mask_dir = args['mask_dir'] if args['mask_dir'] else cfg["paths"]["masks"]
     splits_dir = args['splits_dir'] if args['splits_dir'] else cfg["paths"]["splits"]
+    square_roi = args['square_roi'] if args['square_roi'] else bool(cfg['pretrain']['square_roi'])
     height = cfg['data']['height']
     width = cfg['data']['width']
     channels = 3
@@ -73,6 +74,7 @@ def train(
         k_fold_test_clips=test_clips,
         min_crop=min_crop,
         mask_dir=mask_dir,
+        square_roi=square_roi,
         convert_all_to_linear=convert_all_to_linear
     )
     if ckpt_metric is None:
@@ -342,6 +344,8 @@ if __name__ == '__main__':
     parser.add_argument('--experiment_type', type=str, default='single_train', required=False, help='Type of training experiment')
     parser.add_argument('--k-folds', type=int, default=10, required=False, help='Number of folds for k-fold cross-validation')
     parser.add_argument('--min_crop', required=False, type=float, default=0.7, help='Minimum crop for random crop & resize')
+    parser.add_argument('--square_roi', required=False, type=int, help='1 if images cropped and resized to square; 0 otherwise')
+
     args = vars(parser.parse_args())
     print(f"Args: {json.dumps(args, indent=2)}")
 
