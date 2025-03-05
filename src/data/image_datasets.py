@@ -91,12 +91,65 @@ class ImageClassificationDataset(Dataset):
             n_classes: int,
             transforms: Optional[Callable],
             img_ext: str = ".jpg",
-            device: str = "cpu"
+            device: str = "cpu",
+            mask_root_dir: Optional[str] = None,
     ):
         assert len(img_paths) == len(labels), "Number of images and labels must match."
         self.image_paths = [p.replace("\\", "/") for p in img_paths]
         self.img_ext = img_ext
         self.img_root_dir = img_root_dir
+        self.n_classes = n_classes
+        if n_classes == 2:
+            self.labels = torch.from_numpy(labels. astype(np.float32)).unsqueeze(-1)
+        else:
+            self.labels = torch.from_numpy(labels)
+        self.label_freqs = np.unique(labels, return_counts=True)[1] / len(labels)
+        self.transforms = transforms
+        self.device = device
+        self.cardinality = len(self.image_paths)
+
+    def __len__(self):
+        return self.cardinality
+
+    def __getitem__(self, idx):
+
+        # Load image
+        image_path = os.path.join(
+            self.img_root_dir,
+            self.image_paths[idx]
+        )
+        x = read_image(image_path).to(self.device)
+        
+        # Load label
+        y = self.labels[idx]
+
+        # Apply data augmentation transforms
+        if self.transforms:
+            x = self.transforms(x)
+
+        return x, y
+    
+
+class ImageClassificationDatasetWithMasks(Dataset):
+    def __init__(
+            self,
+            img_root_dir: str,
+            mask_root_dir: str,
+            img_records: pd.DataFrame,
+            labels: np.ndarray,
+            n_classes: int,
+            transforms: Optional[Callable],
+            img_ext: str = ".jpg",
+            device: str = "cpu"
+    ):
+        assert len(img_records) == len(labels), "Number of images and labels must match."
+        self.image_paths = [p.replace("\\", "/") for p in img_records["filepath"].tolist()]
+        self.mask_paths = [f"{id}_mask{img_ext}" for id in img_records["id"].tolist()]
+        self.keypoints = img_records[["x1", "y1", "x2", "y2", "x3", "y3", "x4", "y4"]].values.astype(np.float32)
+        self.probe_types = np.array([Probe[p.replace(' ', '_').upper()].value for p in img_records["probe_type"].tolist()])
+        self.img_ext = img_ext
+        self.img_root_dir = img_root_dir
+        self.mask_root_dir = mask_root_dir
         self.n_classes = n_classes
         if n_classes == 2:
             self.labels = torch.from_numpy(labels. astype(np.float32)).unsqueeze(-1)
@@ -342,6 +395,7 @@ def prepare_train_dataloader(
         n_workers: int = 0,
         drop_last: bool = False,
         resize: bool = True,
+        mask_dir: Optional[str] = None,
         **preprocess_kwargs
 ) -> DataLoader:
     '''
@@ -385,13 +439,23 @@ def prepare_train_dataloader(
         )
     else:
         n_classes = file_df[label_name].nunique()
-        dataset = ImageClassificationDataset(
-            img_root,
-            file_df['filepath'].tolist(),
-            file_df[label_name].to_numpy(),
-            n_classes,
-            transforms=augmentations
-        )
+        if preprocess_kwargs["convert_all_to_linear"]:
+            dataset = ImageClassificationDatasetWithMasks(
+                img_root,
+                mask_dir,
+                file_df,
+                file_df[label_name].to_numpy(),
+                n_classes,
+                transforms=augmentations
+            )
+        else:
+            dataset = ImageClassificationDataset(
+                img_root,
+                file_df['filepath'].tolist(),
+                file_df[label_name].to_numpy(),
+                n_classes,
+                transforms=augmentations
+            )
 
     persistent_workers = n_workers > 0
     collate_fn = collate_fn_obj_det if label_name == 'pl_label' else None
@@ -554,6 +618,8 @@ def load_data_for_train(
         resize: bool = True,
         train_clips: pd.DataFrame = None,
         k_fold_test_clips: pd.DataFrame = None,
+        mask_dir: Optional[str] = None,
+        convert_all_to_linear: bool = False,
         **preprocess_kwargs
 ) -> (DataLoader, DataLoader, DataLoader):
     """
@@ -616,7 +682,7 @@ def load_data_for_train(
     val_clips_df = val_clips_df.loc[val_clips_df[label_name] != unl_val]
     val_frames_df = val_frames_df.loc[val_frames_df[label_name] != unl_val]
     print("Validation clips:\n", val_clips_df.describe())
-
+    
     # Load test set
     if k_fold_test_clips is not None:
         # For k-fold cross validation in this study, test set constitutes a split of the training pool
@@ -636,6 +702,28 @@ def load_data_for_train(
         else:
             test_frames_df = pd.DataFrame()
             test_clips_df = pd.DataFrame()
+            
+    # Add clip-wise keypoints and probe types to frame records
+    if convert_all_to_linear:
+        train_frames_df = pd.merge(
+            train_frames_df,
+            train_clips_df[["id", "x1", "y1", "x2", "y2", "x3", "y3", "x4", "y4", "probe_type"]],
+            how='left',
+            on='id'
+        )
+        val_frames_df = pd.merge(
+            val_frames_df,
+            val_clips_df[["id", "x1", "y1", "x2", "y2", "x3", "y3", "x4", "y4", "probe_type"]],
+            how='left',
+            on='id'
+        )
+        test_frames_df = pd.merge(
+            test_frames_df,
+            test_clips_df[["id", "x1", "y1", "x2", "y2", "x3", "y3", "x4", "y4", "probe_type"]],
+            how='left',
+            on='id'
+        )
+
     if label_name == 'pl_label':
         test_frames_df['pl_label'] = test_frames_df['pl_label'].astype(str)
     test_clips_df = test_clips_df.loc[test_clips_df[label_name] != unl_val]
@@ -655,6 +743,8 @@ def load_data_for_train(
         n_workers=n_train_workers,
         drop_last=True,
         resize=resize,
+        mask_dir=mask_dir,
+        convert_all_to_linear=convert_all_to_linear,
         **preprocess_kwargs
     )
     if val_frames_df.shape[0] > 0:
@@ -671,6 +761,8 @@ def load_data_for_train(
             n_workers=n_val_workers,
             drop_last=False,
             resize=resize,
+            mask_dir=mask_dir,
+            convert_all_to_linear=convert_all_to_linear,
             **preprocess_kwargs
         )
     else:
@@ -690,6 +782,8 @@ def load_data_for_train(
             n_workers=n_test_workers,
             drop_last=False,
             resize=resize,
+            mask_dir=mask_dir,
+            convert_all_to_linear=convert_all_to_linear,
             **preprocess_kwargs
         )
     else:

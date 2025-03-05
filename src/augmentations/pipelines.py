@@ -503,6 +503,7 @@ def get_supervised_augmentations_cls(
         transforms.insert(0, ProbeTypeChange(square_roi=square_roi, min_linear_width_frac=1.0, max_linear_width_frac=1.0, pass_through='linear'))
     if resize:
         transforms.insert(0, v2.Resize((height, width)))
+    print(f"TRANSFORMS: {transforms}")
     return v2.Compose(transforms)
 
 

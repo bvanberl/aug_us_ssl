@@ -67,3 +67,5 @@ train:
     min_ratio: 0.023
     max_ratio: 0.17
     aspect_ratios: [2, 3, 4, 5]
+  augmentation:
+    convert_all_to_linear: true

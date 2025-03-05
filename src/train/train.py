@@ -40,6 +40,7 @@ def train(
 
     # Specify image directory, splits CSV directory, image shape, batch size
     image_dir = args['image_dir'] if args['image_dir'] else cfg["paths"]["images"]
+    mask_dir = args['mask_dir'] if args['mask_dir'] else cfg["paths"]["masks"]
     splits_dir = args['splits_dir'] if args['splits_dir'] else cfg["paths"]["splits"]
     height = cfg['data']['height']
     width = cfg['data']['width']
@@ -54,6 +55,7 @@ def train(
     else:
         augment_pipeline = cfg['train']['augment_pipeline']
     min_crop = args['min_crop']
+    convert_all_to_linear = cfg['train']['augmentation']['convert_all_to_linear']
 
     # Create training and validation data loaders
     train_loader, val_loader, test_loader = load_data_for_train(
@@ -69,7 +71,9 @@ def train(
         n_test_workers=n_test_workers,
         train_clips=train_clips,
         k_fold_test_clips=test_clips,
-        min_crop=min_crop
+        min_crop=min_crop,
+        mask_dir=mask_dir,
+        convert_all_to_linear=convert_all_to_linear
     )
     if ckpt_metric is None:
         val_loader = None   # Don't get validation set metrics if not monitoring val performance
@@ -316,6 +320,7 @@ if __name__ == '__main__':
     parser.add_argument('--linear', required=False, type=int, help='0 for fine-tuning, 1 for linear')
     parser.add_argument('--extractor_weights', required=False, type=str, help='Path to saved joint embedding model')
     parser.add_argument('--image_dir', required=False, default='', type=str, help='Root directory containing images')
+    parser.add_argument('--mask_dir', required=False, default='', type=str, help='Root directory containing masks')
     parser.add_argument('--splits_dir', required=False, default='', type=str,
                         help='Root directory containing splits information')
     parser.add_argument('--nodes', default=1, type=int, help='Number of nodes')
