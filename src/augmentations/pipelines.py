@@ -107,7 +107,9 @@ def get_original_byol_augmentations(
         transforms.pop(exclude_idx)     # Leave out one transformation
     if convert_all_to_linear:
         transforms.insert(0, ProbeTypeChange(square_roi=square_roi, min_linear_width_frac=1.0, max_linear_width_frac=1.0, pass_through='linear'))
-    if resize:
+        if resize:
+            transforms.insert(0, ResizeKeypoint((height, width)))
+    elif resize:
         transforms.insert(0, v2.Resize((height, width)))
     return v2.Compose(transforms)
 
@@ -152,7 +154,9 @@ def get_symmetrized_byol_augmentations(
         transforms.pop(exclude_idx)     # Leave out one transformation
     if convert_all_to_linear:
         transforms.insert(0, ProbeTypeChange(square_roi=square_roi, min_linear_width_frac=1.0, max_linear_width_frac=1.0, pass_through='linear'))
-    if resize:
+        if resize:
+            transforms.insert(0, ResizeKeypoint((height, width)))
+    elif resize:
         transforms.insert(0, v2.Resize((height, width)))
     return v2.Compose(transforms)
 
@@ -197,8 +201,11 @@ def get_grayscale_byol_augmentations(
         transforms.pop(exclude_idx)     # Leave out one transformation
     if convert_all_to_linear:
         transforms.insert(0, ProbeTypeChange(square_roi=square_roi, min_linear_width_frac=1.0, max_linear_width_frac=1.0, pass_through='linear'))
-    if resize:
+        if resize:
+            transforms.insert(0, ResizeKeypoint((height, width)))
+    elif resize:
         transforms.insert(0, v2.Resize((height, width)))
+    print(f"TRANSFORMS: {transforms}")
     return v2.Compose(transforms)
 
 
@@ -297,8 +304,11 @@ def get_august_original_augmentations(
         transforms.pop(0)  # Remove probe type change
         transforms.pop(0)  # Remove convexity change
         transforms.insert(0, ProbeTypeChange(square_roi=square_roi, min_linear_width_frac=1.0, max_linear_width_frac=1.0, pass_through='linear'))
-    if resize:
+        if resize:
+            transforms.insert(1, ResizeKeypoint(size=[height, width]))
+    elif resize:
         transforms.insert(2, ResizeKeypoint(size=[height, width]))
+    print(f"TRANSFORMS: {transforms}")
     return v2.Compose(transforms)
 
 
@@ -365,7 +375,7 @@ def get_august_refined_augmentations(
     if convert_all_to_linear:
         transforms.insert(0, ProbeTypeChange(square_roi=square_roi, min_linear_width_frac=1.0, max_linear_width_frac=1.0, pass_through='linear'))
     if resize:
-        transforms.insert(2, ResizeKeypoint(size=[height, width]))
+        transforms.insert(0, ResizeKeypoint(size=[height, width]))
     print(f"TRANSFORMS: {transforms}")
     return v2.Compose(transforms)
 
@@ -461,8 +471,10 @@ def get_crop_only_augmentations(
     ]
     if convert_all_to_linear:
         transforms.insert(0, ProbeTypeChange(square_roi=square_roi, min_linear_width_frac=1.0, max_linear_width_frac=1.0, pass_through='linear'))
-    if resize:
-        transforms.insert(0, ResizeKeypoint(size=[height, width]))
+        if resize:
+            transforms.insert(0, ResizeKeypoint(size=[height, width]))
+    elif resize:
+        transforms.insert(0, v2.Resize(size=[height, width]))
     print(f"TRANSFORMS: {transforms}")
     print(f"MIN CROP: {min_crop}")
     print(f"MIN RAIO: {min_ratio}")
@@ -505,7 +517,7 @@ def get_supervised_augmentations_cls(
     if convert_all_to_linear:
         transforms.insert(0, ProbeTypeChange(square_roi=square_roi, min_linear_width_frac=1.0, max_linear_width_frac=1.0, pass_through='linear'))
         if resize:
-            transforms.insert(1, ResizeKeypoint(size=[height, width]))
+            transforms.insert(0, ResizeKeypoint(size=[height, width]))
     elif resize:
         transforms.insert(0, v2.Resize((height, width)))
     print(f"TRANSFORMS: {transforms}")
