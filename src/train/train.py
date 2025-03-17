@@ -16,7 +16,7 @@ from src.models.classifier import Classifier
 from src.models.ssd import SSDLite
 from src.models.joint_embedding import JointEmbeddingModel
 from src.models.extractors import get_extractor
-from src.data.image_datasets import load_data_for_train, k_way_train_split
+from src.data.image_datasets import load_data_for_train, k_way_train_split, load_fixed_kfold_splits
 from src.train.utils import *
 
 torchvision.disable_beta_transforms_warning()
@@ -26,6 +26,8 @@ def train(
         args: dict,
         train_clips: pd.DataFrame = None,
         test_clips: pd.DataFrame = None,
+        train_frames: pd.DataFrame = None,
+        test_frames: pd.DataFrame = None,
         ckpt_metric: Optional[str] = None,
         perform_test: bool = False,
         save_checkpoints: bool = True,
@@ -72,6 +74,8 @@ def train(
         n_test_workers=n_test_workers,
         train_clips=train_clips,
         k_fold_test_clips=test_clips,
+        train_frames=train_frames,
+        k_fold_test_frames=test_frames,
         min_crop=min_crop,
         mask_dir=mask_dir,
         square_roi=square_roi,
@@ -273,24 +277,28 @@ def label_efficiency_experiment(cfg: dict, args: dict):
     metrics_df.to_csv(os.path.join(base_checkpoint_dir, "label_efficiency_results.csv"), index=False)
 
 
-def k_fold_cross_validation(cfg: dict, args: dict):
+def k_fold_cross_validation(cfg: dict, args: dict, fixed_frame_folds: bool = False):
     """
     Splits training set by patient into k folds. Performs k-fold cross-
     validation and records test metrics for each trial.
     :param cfg: The config.yaml file dictionary
     :param args: Command-line arguments
+    :param fixed_frame_folds: True if the folds have already been split.
     """
 
-    k = cfg['train']['k_folds']
-
-    train_dfs = k_way_train_split(
-        args['splits_dir'],
-        k,
-        args['label'],
-        seed=args['seed'],
-        stratify_by_label=True,
-        group_col='patient_id'
-    )
+    if fixed_frame_folds:
+        train_dfs = load_fixed_kfold_splits(args['splits_dir'])
+        k = len(train_dfs)
+    else:
+        k = cfg['train']['k_folds']
+        train_dfs = k_way_train_split(
+            args['splits_dir'],
+            k,
+            args['label'],
+            seed=args['seed'],
+            stratify_by_label=True,
+            group_col='patient_id'
+        )
 
     base_checkpoint_dir = args['checkpoint_dir']
     metrics_df = pd.DataFrame()
@@ -303,7 +311,10 @@ def k_fold_cross_validation(cfg: dict, args: dict):
         train_idxs = [j for j in list(range(k)) if j != i]
         train_df = pd.concat([train_dfs[j] for j in train_idxs])
         cur_fold_df = train_dfs[i]
-        test_metrics = train(cfg, args, train_clips=train_df, test_clips=cur_fold_df, perform_test=True, save_checkpoints=False)
+        if fixed_frame_folds:
+            test_metrics = train(cfg, args, train_frames=train_df, test_frames=cur_fold_df, perform_test=True, save_checkpoints=False)
+        else:
+            test_metrics = train(cfg, args, train_clips=train_df, test_clips=cur_fold_df, perform_test=True, save_checkpoints=False)
 
         if i == 0:
             metrics_df = pd.DataFrame([test_metrics])
@@ -371,8 +382,10 @@ if __name__ == '__main__':
     if args['experiment_type'] == 'single_train':
         test_metrics = train(cfg, args, ckpt_metric='val/loss', save_checkpoints=True, perform_test=args['test'])
         print(f"Test metrics: {json.dumps(test_metrics, indent=2)}")
-    elif args['experiment_type'] == 'cross_validation':
-        k_fold_cross_validation(cfg, args)
+    elif args['experiment_type'] == 'cross_validation_rand_folds':
+        k_fold_cross_validation(cfg, args, fixed_frame_folds=False)
+    elif args['experiment_type'] == 'cross_validation_fixed_folds':
+        k_fold_cross_validation(cfg, args, fixed_frame_folds=True)
     elif args['experiment_type'] == 'label_efficiency':
         label_efficiency_experiment(cfg, args)
     else:

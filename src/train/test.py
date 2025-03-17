@@ -55,6 +55,7 @@ if __name__ == '__main__':
     n_test_workers = args["num_test_workers"]
     num_nodes = args['nodes']
     num_gpus = args['gpus_per_node']
+    convert_all_to_linear = cfg['train']['augmentation']['convert_all_to_linear']
 
     test_loader = load_data_for_test(
         image_dir,
@@ -63,7 +64,8 @@ if __name__ == '__main__':
         height,
         splits_dir,
         batch_size,
-        n_test_workers=n_test_workers
+        n_test_workers=n_test_workers,
+        convert_all_to_linear=convert_all_to_linear
     )
 
     trainer = Trainer(

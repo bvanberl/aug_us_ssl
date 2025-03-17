@@ -620,6 +620,8 @@ def load_data_for_train(
         resize: bool = True,
         train_clips: pd.DataFrame = None,
         k_fold_test_clips: pd.DataFrame = None,
+        train_frames: pd.DataFrame = None,
+        k_fold_test_frames: pd.DataFrame = None,
         mask_dir: Optional[str] = None,
         square_roi: bool = True,
         convert_all_to_linear: bool = False,
@@ -644,32 +646,47 @@ def load_data_for_train(
     :param train_clips: Subset of training pool clips to force as the training set
     :param k_fold_test_clips: Subset of training pool clips to force as the test set.
                               Use for k-fold cross-validation.
+    :param train_frames: Subset of training pool frames to force as the training set
+    :param k_fold_test_frames: Subset of training pool frames to force as the test set.
+                              Use for k-fold cross-validation.
     :param preprocess_kwargs: Keyword arguments for preprocessing
     :return: datasets for training
     """
+
+    assert not (train_frames is not None and train_clips is not None), "Can't specify training clips and training frames simultaneously"
+    assert not (k_fold_test_frames is not None and k_fold_test_clips is not None), "Can't specify test clips and test frames simultaneously"
 
     unl_val = '-1' if label_name == 'pl_label' else -1
 
     # Load training set
     train_frames_path = os.path.join(splits_dir, f'train_set_frames.csv')
     train_clips_path = os.path.join(splits_dir, 'train_set_clips.csv')
-    if os.path.exists(train_frames_path) and os.path.exists(train_clips_path):
-        train_pool_frames_df = pd.read_csv(train_frames_path)
+    if os.path.exists(train_clips_path):
         train_pool_clips_df = pd.read_csv(train_clips_path)
     else:
-        train_pool_frames_df = pd.DataFrame()
         train_pool_clips_df = pd.DataFrame()
-    if train_clips is None:
+    if os.path.exists(train_frames_path):
+        train_pool_frames_df = pd.read_csv(train_frames_path)
+    else:
+        train_pool_frames_df = pd.DataFrame()
+    if train_clips is None and train_frames is None:
         if label_name == 'pl_label':
             train_pool_frames_df['pl_label'] = train_pool_frames_df['pl_label'].astype(str)
         train_clips_df = train_pool_clips_df.loc[train_pool_clips_df[label_name] != unl_val]
         train_frames_df = train_pool_frames_df.loc[train_pool_frames_df[label_name] != unl_val]
+    elif train_frames is not None:
+        assert set(train_frames['id'].tolist()).issubset(set(train_pool_frames_df['id'].tolist())), \
+            'Some frames in `train_frames` are not in the training pool.'
+        train_frames_df = train_pool_frames_df.loc[train_pool_frames_df['id'].isin(train_frames['id'])]
+        train_clips_df = pd.DataFrame()
     else:
         assert set(train_clips['id'].tolist()).issubset(set(train_pool_clips_df['id'].tolist())), \
             'Some clips in `train_clips` are not in the training pool.'
         train_clips_df = train_clips
         train_frames_df = train_pool_frames_df.loc[train_pool_frames_df['id'].isin(train_clips['id'])]
-    print("Training clips:\n", train_clips_df.describe())
+    if len(train_clips_df) > 0:
+        print("Training clips:\n", train_clips_df.describe())
+    print("Training frames:\n", train_frames_df.describe())
 
     # Load validation set
     val_frames_path = os.path.join(splits_dir, f'val_set_frames.csv')
@@ -682,12 +699,15 @@ def load_data_for_train(
         val_clips_df = pd.DataFrame()
     if label_name == 'pl_label':
         val_frames_df['pl_label'] = val_frames_df['pl_label'].astype(str)
-    val_clips_df = val_clips_df.loc[val_clips_df[label_name] != unl_val]
-    val_frames_df = val_frames_df.loc[val_frames_df[label_name] != unl_val]
-    print("Validation clips:\n", val_clips_df.describe())
+    if len(val_clips_df) > 0:
+        val_clips_df = val_clips_df.loc[val_clips_df[label_name] != unl_val]
+        print("Validation clips:\n", val_clips_df.describe())
+    if len(val_frames_df) > 0:
+        val_frames_df = val_frames_df.loc[val_frames_df[label_name] != unl_val]
+        print("Validation frames:\n", val_frames_df.describe())
     
     # Load test set
-    if k_fold_test_clips is not None:
+    if k_fold_test_clips is not None and k_fold_test_frames is None:
         # For k-fold cross validation in this study, test set constitutes a split of the training pool
         assert set(k_fold_test_clips['id'].tolist()).issubset(set(train_pool_clips_df['id'].tolist())), \
             'Some clips in `k_fold_test_clips` are not in the training pool.'
@@ -695,6 +715,13 @@ def load_data_for_train(
             'Nonzero intersection between training and test sets for cross validation'
         test_clips_df = k_fold_test_clips
         test_frames_df = train_pool_frames_df.loc[train_pool_frames_df['id'].isin(k_fold_test_clips['id'])]
+    elif k_fold_test_frames is not None:
+        assert set(k_fold_test_frames['id'].tolist()).issubset(set(train_pool_frames_df['id'].tolist())), \
+            'Some frames in `k_fold_test_frames` are not in the training pool.'
+        assert len(set(k_fold_test_frames['id'].tolist()).intersection(set(train_frames['id'].tolist()))) == 0, \
+            'Nonzero intersection between training and test sets for cross validation'
+        test_frames_df = train_pool_frames_df.loc[train_pool_frames_df['id'].isin(k_fold_test_frames['id'])]
+        test_clips_df = pd.DataFrame()
     else:
         # Load the pre-defined test set
         test_frames_path = os.path.join(splits_dir, f'test_set_frames.csv')
@@ -729,9 +756,11 @@ def load_data_for_train(
 
     if label_name == 'pl_label':
         test_frames_df['pl_label'] = test_frames_df['pl_label'].astype(str)
-    test_clips_df = test_clips_df.loc[test_clips_df[label_name] != unl_val]
     test_frames_df = test_frames_df.loc[test_frames_df[label_name] != unl_val]
-    print("Test clips:\n", test_clips_df.describe())
+    if len(test_clips_df) > 0:
+        test_clips_df = test_clips_df.loc[test_clips_df[label_name] != unl_val]
+        print("Test clips:\n", test_clips_df.describe())
+    print("Test frames:\n", test_frames_df.describe())
 
     train_loader = prepare_train_dataloader(
         image_dir,
@@ -807,6 +836,7 @@ def load_data_for_test(
         batch_size: int,
         n_test_workers: int = 0,
         resize: bool = True,
+        convert_all_to_linear: bool = False,
         **preprocess_kwargs
 ) -> DataLoader:
     """
@@ -843,6 +873,7 @@ def load_data_for_test(
         n_workers=n_test_workers,
         drop_last=False,
         resize=resize,
+        convert_all_to_linear=convert_all_to_linear,
         **preprocess_kwargs
     )
     return test_loader
@@ -898,3 +929,22 @@ def k_way_train_split(
             raise ValueError(f"Only one label found in the {i}'th training subset.")
 
     return train_clip_dfs
+
+
+def load_fixed_kfold_splits(labels_dir: str):
+    """
+    Loads training/test folds from a previously split dataset for
+    k-fold cross-validation (by frame). Used for the POCUS dataset.
+    Args:
+        labels_dir: Directory in which frame-wise labels are stored
+        label_col: Column name containing the frame label
+
+    Returns: List of training dataframes
+    """
+    train_frame_df = pd.read_csv(os.path.join(labels_dir, 'train_set_frames.csv'))
+
+    train_frame_dfs = []
+    fold_ids = train_frame_df['fold'].unique().tolist()
+    for fold_id in fold_ids:
+        train_frame_dfs.append(train_frame_df.loc[train_frame_df['fold'] == fold_id])
+    return train_frame_dfs

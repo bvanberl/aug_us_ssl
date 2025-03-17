@@ -53,8 +53,8 @@ train:
   seed: 11
   label: 'covid-us_label'
   linear: false
-  epochs: 30
-  batch_size: 256
+  epochs: 100
+  batch_size: 512
   lr_head: 0.02
   lr_extractor: 0.002
   weight_decay: 0.000001
