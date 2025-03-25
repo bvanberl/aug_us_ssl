@@ -50,6 +50,7 @@ class ImagePretrainDataset(Dataset):
         else:
             self.read_mode = ImageReadMode.UNCHANGED
 
+        self.mask_max = mask_max
         self.height = height
         self.width = width
         self.cardinality = len(self.image_paths)
