@@ -28,6 +28,7 @@ class ImagePretrainDataset(Dataset):
             height: int = 224,
             width: int = 224,
             channels: int = 3,
+            mask_max: int = 255,
             device: str = 'cpu'
     ):
         self.device = device
@@ -66,6 +67,7 @@ class ImagePretrainDataset(Dataset):
         # Load ancillary inputs
         mask_path = os.path.join(self.mask_root_dir, self.mask_paths[idx])
         mask = read_image(mask_path).to(self.device)
+        mask = torch.where(mask > self.mask_max / 2, 1., 0.)
         label = torch.tensor(-1)    # No label
         keypoints = torch.tensor(self.keypoints[idx], device=self.device)
         probe_type = torch.tensor(self.probe_types[idx], device=self.device)
@@ -105,6 +107,7 @@ class ImageClassificationDataset(Dataset):
             self.labels = torch.from_numpy(labels)
         self.label_freqs = np.unique(labels, return_counts=True)[1] / len(labels)
         self.transforms = transforms
+        self.mask_max = mask_max
         self.device = device
         self.cardinality = len(self.image_paths)
 
@@ -140,6 +143,7 @@ class ImageClassificationDatasetWithMasks(Dataset):
             n_classes: int,
             transforms: Optional[Callable],
             img_ext: str = ".jpg",
+            mask_max: int = 255,
             device: str = "cpu"
     ):
         assert len(img_records) == len(labels), "Number of images and labels must match."
@@ -157,6 +161,7 @@ class ImageClassificationDatasetWithMasks(Dataset):
             self.labels = torch.from_numpy(labels)
         self.label_freqs = np.unique(labels, return_counts=True)[1] / len(labels)
         self.transforms = transforms
+        self.mask_max = mask_max
         self.device = device
         self.cardinality = len(self.image_paths)
 
@@ -178,6 +183,7 @@ class ImageClassificationDatasetWithMasks(Dataset):
         # Load ancillary inputs
         mask_path = os.path.join(self.mask_root_dir, self.mask_paths[idx])
         mask = read_image(mask_path).to(self.device)
+        mask = torch.where(mask > self.mask_max / 2, 1., 0.)
         keypoints = torch.tensor(self.keypoints[idx], device=self.device)
         probe_type = torch.tensor(self.probe_types[idx], device=self.device)
 
