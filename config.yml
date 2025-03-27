@@ -37,7 +37,7 @@ pretrain:
         min_crop: 0.08
         min_ratio: 0.75
         max_ratio: 1.33333333333
-        convert_all_to_linear: true
+        convert_all_to_linear: false
     barlow_twins:
       lambda_: 0.005
     vicreg:
@@ -68,4 +68,4 @@ train:
     max_ratio: 0.17
     aspect_ratios: [2, 3, 4, 5]
   augmentation:
-    convert_all_to_linear: true
+    convert_all_to_linear: false

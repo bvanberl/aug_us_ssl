@@ -103,12 +103,12 @@ class ProbeTypeChange(nn.Module):
             bot_r = (y3 - y1) * rad_factor
 
             # Calculate new keypoints
-            x_itn = (x4 - x3) / 2.
+            x_itn = torch.clamp(x3, min=0.) + (x4 - x3) / 2.
             y_itn = y3 - bot_r
             new_y3 = y_itn + torch.sqrt(bot_r ** 2 - (x_itn - x1) ** 2)
             new_y4 = new_y3
             new_x1 = x_itn - (y1 - y_itn) * (x_itn - x3) / (new_y3 - y_itn)
-            new_x2 = 2 * x_itn - new_x1
+            new_x2 = x_itn + (y1 - y_itn) * (x_itn - x3) / (new_y3 - y_itn) #2 * x_itn - new_x1
             top_r = torch.sqrt((x_itn - new_x1) ** 2 + (y1 - y_itn) ** 2)
             new_keypoints = torch.stack([new_x1, y1, new_x2, y2, x3, new_y3, x4, new_y4])
 
@@ -118,7 +118,7 @@ class ProbeTypeChange(nn.Module):
             new_yy, new_xx = torch.meshgrid(y_coords, x_coords, indexing='ij')
             out_xx = torch.atan2(new_xx - x_itn, new_yy - y_itn)
             x_squeeze_factor = 1. / torch.abs(out_xx[new_y3.int(), 0])
-            out_xx = out_xx * x_squeeze_factor
+            out_xx = (out_xx + (x_itn - w / 2 ) / w) * x_squeeze_factor
             out_yy = (torch.sqrt((x_itn - new_xx) ** 2 + (y_itn - new_yy) ** 2) - top_r) / (bot_r - top_r)
             out_yy = out_yy * 2. - 1.
 
