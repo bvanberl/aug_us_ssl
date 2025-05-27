@@ -79,7 +79,8 @@ def train(
         min_crop=min_crop,
         mask_dir=mask_dir,
         square_roi=square_roi,
-        convert_all_to_linear=convert_all_to_linear
+        convert_all_to_linear=convert_all_to_linear,
+        mask_max=args['mask_max'],
     )
     if ckpt_metric is None:
         val_loader = None   # Don't get validation set metrics if not monitoring val performance
@@ -356,6 +357,7 @@ if __name__ == '__main__':
     parser.add_argument('--k-folds', type=int, default=10, required=False, help='Number of folds for k-fold cross-validation')
     parser.add_argument('--min_crop', required=False, type=float, default=0.7, help='Minimum crop for random crop & resize')
     parser.add_argument('--square_roi', required=False, type=int, help='1 if images cropped and resized to square; 0 otherwise')
+    parser.add_argument('--mask_max', required=False, type=int, default=1, help="Value of pixels to keep in masks")
 
     args = vars(parser.parse_args())
     print(f"Args: {json.dumps(args, indent=2)}")

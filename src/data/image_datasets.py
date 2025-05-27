@@ -82,7 +82,7 @@ class ImagePretrainDataset(Dataset):
                 x2 = self.transforms2(x2, label, keypoints, mask, probe_type)[0]
         except Exception as e:
             print(e, traceback.format_exc(), image_path, keypoints)
-        return x1, x2
+        return x1, x2, image_path
 
 
 class ImageClassificationDataset(Dataset):
@@ -95,6 +95,7 @@ class ImageClassificationDataset(Dataset):
             transforms: Optional[Callable],
             img_ext: str = ".jpg",
             device: str = "cpu",
+            mask_max: int = 255,
             mask_root_dir: Optional[str] = None,
     ):
         assert len(img_paths) == len(labels), "Number of images and labels must match."
@@ -324,6 +325,7 @@ def prepare_pretrain_dataloader(
         device: str = 'cpu',
         exclude_idx: int = -1,
         square_roi: bool = True,
+        mask_max: int = 255,
         **preprocess_kwargs
 ) -> DataLoader:
     '''
@@ -375,6 +377,7 @@ def prepare_pretrain_dataloader(
         transforms1=augment1,
         transforms2=augment2,
         device=device,
+        mask_max=mask_max
     )
 
     persistent_workers = n_workers > 0
@@ -404,6 +407,7 @@ def prepare_train_dataloader(
         resize: bool = True,
         square_roi: bool = True,
         mask_dir: Optional[str] = None,
+        mask_max: int = 255,
         **preprocess_kwargs
 ) -> DataLoader:
     '''
@@ -455,7 +459,8 @@ def prepare_train_dataloader(
                 file_df,
                 file_df[label_name].to_numpy(),
                 n_classes,
-                transforms=augmentations
+                transforms=augmentations,
+                mask_max=mask_max
             )
         else:
             dataset = ImageClassificationDataset(
@@ -463,7 +468,8 @@ def prepare_train_dataloader(
                 file_df['filepath'].tolist(),
                 file_df[label_name].to_numpy(),
                 n_classes,
-                transforms=augmentations
+                transforms=augmentations,
+                mask_max=mask_max
             )
 
     persistent_workers = n_workers > 0
@@ -496,6 +502,7 @@ def load_data_for_pretrain(
         resize: bool = True,
         exclude_idx: int = -1,
         square_roi: bool = True,
+        mask_max: int = 255,
         **preprocess_kwargs
 ) -> (DataLoader, pd.DataFrame):
     """
@@ -587,6 +594,7 @@ def load_data_for_pretrain(
         resize=resize,
         exclude_idx=exclude_idx,
         square_roi=square_roi,
+        mask_max=mask_max,
         **preprocess_kwargs
     )
     if val_frames_df.shape[0] > 0:
@@ -605,6 +613,7 @@ def load_data_for_pretrain(
             resize=resize,
             exclude_idx=exclude_idx,
             square_roi=square_roi,
+            mask_max=mask_max,
             **preprocess_kwargs
         )
     else:
@@ -632,6 +641,7 @@ def load_data_for_train(
         mask_dir: Optional[str] = None,
         square_roi: bool = True,
         convert_all_to_linear: bool = False,
+        mask_max: int = 255,
         **preprocess_kwargs
 ) -> (DataLoader, DataLoader, DataLoader):
     """
@@ -785,6 +795,7 @@ def load_data_for_train(
         mask_dir=mask_dir,
         square_roi=square_roi,
         convert_all_to_linear=convert_all_to_linear,
+        mask_max=mask_max,
         **preprocess_kwargs
     )
     if val_frames_df.shape[0] > 0:
@@ -804,6 +815,7 @@ def load_data_for_train(
             mask_dir=mask_dir,
             square_roi=square_roi,
             convert_all_to_linear=convert_all_to_linear,
+            mask_max=mask_max,
             **preprocess_kwargs
         )
     else:
@@ -826,6 +838,7 @@ def load_data_for_train(
             mask_dir=mask_dir,
             square_roi=square_roi,
             convert_all_to_linear=convert_all_to_linear,
+            mask_max=mask_max,
             **preprocess_kwargs
         )
     else:
@@ -844,6 +857,7 @@ def load_data_for_test(
         n_test_workers: int = 0,
         resize: bool = True,
         convert_all_to_linear: bool = False,
+        mask_max: int = 255,
         **preprocess_kwargs
 ) -> DataLoader:
     """
@@ -881,6 +895,7 @@ def load_data_for_test(
         drop_last=False,
         resize=resize,
         convert_all_to_linear=convert_all_to_linear,
+        mask_max=mask_max,
         **preprocess_kwargs
     )
     return test_loader

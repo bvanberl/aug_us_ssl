@@ -50,6 +50,7 @@ if __name__ == '__main__':
     parser.add_argument('--deterministic', action='store_true', help='If provided, sets the `deterministic` flag in Trainer')
     parser.add_argument('--precision', required=False, type=str, default='32-true', help='Floating point precision')
     parser.add_argument('--min_crop', required=False, type=float, default=None, help='Minimum crop for random crop & resize')
+    parser.add_argument('--mask_max', required=False, type=int, default=1, help="Value of pixels to keep in masks")
 
     args = vars(parser.parse_args())
     print(f"Args: {json.dumps(args, indent=2)}")
@@ -121,6 +122,7 @@ if __name__ == '__main__':
         resize=resize,
         exclude_idx=exclude_idx,
         square_roi=square_roi,
+        mask_max=args['mask_max'],
         **hparams
     )
 

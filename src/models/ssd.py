@@ -103,7 +103,8 @@ class SSDLite(pl.LightningModule):
             map_iou_threshold: float = 0.5,
             min_ratio: float = 0.1,
             max_ratio: float = 0.6,
-            aspect_ratios: Optional[List[int]] = None
+            aspect_ratios: Optional[List[float]] = None,
+            alpha: float = 0.25
         ):
         """
         Args:
@@ -130,8 +131,13 @@ class SSDLite(pl.LightningModule):
         size = input_shape[1:3]
         if aspect_ratios is None:
             aspect_ratios = [0.5, 0.75, 1.333, 2.0]
-        
-        anchor_generator = PLBoxGenerator([aspect_ratios for _ in range(6)], min_ratio=min_ratio, max_ratio=max_ratio)
+
+        # anchor_generator = DefaultBoxGenerator(
+        #     [aspect_ratios for _ in range(6)],
+        #     min_ratio=min_ratio,
+        #     max_ratio=max_ratio
+        # )
+        anchor_generator = PLBoxGenerator([aspect_ratios for _ in range(5)], min_ratio=min_ratio, max_ratio=max_ratio)
         out_channels = det_utils.retrieve_out_channels(backbone, size)
         num_anchors = anchor_generator.num_anchors_per_location()
         head = SSDLiteHead(out_channels, num_anchors, num_classes, norm_layer)
@@ -143,7 +149,10 @@ class SSDLite(pl.LightningModule):
             num_classes=num_classes,
             head=head,
             image_mean=[0., 0., 0.],    # Augmentation pipelines perform normalization
-            image_std=[1., 1., 1.]
+            image_std=[1., 1., 1.],
+            iou_thresh=0.6,
+            detections_per_img=5,
+            score_thresh=0.05
         )
         
         self.input_shape = input_shape
@@ -153,6 +162,7 @@ class SSDLite(pl.LightningModule):
         self.weight_decay = weight_decay
         self.distributed = world_size > 1
         self.train_metric_freq = train_metric_freq
+        self.alpha = alpha
 
         self.train_map_metric = tm.detection.mean_ap.MeanAveragePrecision(iou_thresholds=[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7])
         self.val_map_metric = tm.detection.mean_ap.MeanAveragePrecision(iou_thresholds=[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7])
@@ -165,23 +175,23 @@ class SSDLite(pl.LightningModule):
         images, targets = batch
         loss_dict = self.model(images, targets)
 
-        total_loss = loss_dict['classification'] + loss_dict['bbox_regression']
+        total_loss = loss_dict['bbox_regression'] + self.alpha * loss_dict['classification']
         self.log("train/cls_loss", loss_dict['classification'], prog_bar=True, sync_dist=self.distributed)
         self.log("train/bbox_loss", loss_dict['bbox_regression'], prog_bar=True, sync_dist=self.distributed)
         self.log("train/loss", total_loss, prog_bar=True, sync_dist=self.distributed)
 
-        self.model.eval()
-        with torch.no_grad():
-            preds = self.model(images)
-        self.model.train()
-        self.train_map_metric.update(preds, targets)
+        # self.model.eval()
+        # with torch.no_grad():
+        #     preds = self.model(images)
+        # self.model.train()
+        # self.train_map_metric.update(preds, targets)
         return total_loss
 
     def on_train_epoch_end(self):
-        map_dict = self.train_map_metric.compute()
-        #self.log("train/mAP", map_dict['map'], prog_bar=True, on_epoch=True, sync_dist=self.distributed)
-        for k in map_dict:
-            self.log(f"train/{k}", map_dict[k], prog_bar=True, on_epoch=True, sync_dist=self.distributed)
+        # map_dict = self.train_map_metric.compute()
+        # #self.log("train/mAP", map_dict['map'], prog_bar=True, on_epoch=True, sync_dist=self.distributed)
+        # for k in map_dict:
+        #     self.log(f"train/{k}", map_dict[k], prog_bar=True, on_epoch=True, sync_dist=self.distributed)
         #self.log("train/mAP@50", map_dict['map_50'], prog_bar=True, on_epoch=True, sync_dist=self.distributed)
         self.train_map_metric.reset()
         
@@ -193,7 +203,7 @@ class SSDLite(pl.LightningModule):
         with torch.no_grad():
             loss_dict = self.model(images, targets)
         self.model.eval()
-        total_loss = loss_dict['classification'] + loss_dict['bbox_regression']
+        total_loss = loss_dict['bbox_regression'] + self.alpha * loss_dict['classification']
 
         self.log("val/cls_loss", loss_dict['classification'], prog_bar=True, sync_dist=self.distributed)
         self.log("val/bbox_loss", loss_dict['bbox_regression'], prog_bar=True, sync_dist=self.distributed)
