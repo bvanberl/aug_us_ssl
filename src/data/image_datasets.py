@@ -440,7 +440,7 @@ def prepare_train_dataloader(
     )
 
     if label_name == 'pl_label':
-        n_classes = 2
+        n_classes = 2  # Pleural line object + background
         dataset = ImageObjectDetectionDataset(
             img_root,
             file_df['filepath'].tolist(),
