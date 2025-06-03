@@ -103,7 +103,7 @@ class JointEmbeddingModel(pl.LightningModule):
         return z
 
     def training_step(self, batch, batch_idx):
-        x0, x1 = batch
+        x0, x1, _ = batch
 
         # Get embeddings for each view
         z0 = self.forward(x0)
@@ -126,7 +126,7 @@ class JointEmbeddingModel(pl.LightningModule):
         return loss
 
     def validation_step(self, batch, batch_idx):
-        x0, x1 = batch
+        x0, x1, _ = batch
 
         # Get embeddings for each view
         z0 = self.forward(x0)
