@@ -1,5 +1,6 @@
 *.pem
 venv/
+data/
 .idea/
 .git/
 wandb.yml
@@ -10,7 +11,8 @@ artifacts/
 *.sh
 outfiles/
 *.ipynb
-
+core*
+lightning_logs/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

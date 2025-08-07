@@ -12,5 +12,8 @@ class BeamKeypoints(Enum):
 
 class Probe(Enum):
     LINEAR = 0
-    CURVILINEAR = 1
-    PHASED = 2
+    CURVED_LINEAR = 1
+    PHASED_ARRAY = 2
+
+IMAGENET_MEAN = [0.485, 0.456, 0.406]
+IMAGENET_STD = [0.229, 0.224, 0.225]

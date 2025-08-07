@@ -1,0 +1,71 @@
+paths:
+  images: "B:/Datasets/LUS_SSL/aug_us_ssl/data/bmodes"
+  masks: "B:/Datasets/LUS_SSL/aug_us_ssl/data/masks"
+  splits: "B:/Datasets/LUS_SSL/aug_us_ssl/splits/aug_us_ssl_splits"
+  model_weights: "results/models"
+
+data:
+  height: 128
+  width: 128
+  min_pixel_value: 0.0
+  max_pixel_value: 255.0
+  num_channels: 3
+  resize: true
+
+pretrain:
+  seed: 11
+  epochs: 100
+  batch_size: 512
+  max_lr: 0.2
+  warmup_epochs: 10
+  weight_decay: 0.000001
+  extractor: 'mobilenetv3s'
+  proj_nodes: [576, 576]
+  use_bias: true
+  imagenet_weights: true
+  use_unlabelled: true
+  use_labelled: true
+  method: "simclr"
+  augment_pipeline: "byol_symmetrized"
+  n_cutoff_layers: 0
+  exclude_idx: -1
+  square_roi: 0
+  hparams:
+    simclr:
+      tau: 0.1
+      augmentation:
+        min_crop: 0.08
+        min_ratio: 0.75
+        max_ratio: 1.33333333333
+        convert_all_to_linear: false
+    barlow_twins:
+      lambda_: 0.005
+    vicreg:
+      lambda_: 25.0
+      mu: 25.0
+      nu: 1.0
+      augmentation:
+        min_crop: 0.08
+        min_ratio: 0.75
+        max_ratio: 1.33333333333333
+
+train:
+  seed: 11
+  label: 'covid-us_label'
+  linear: false
+  epochs: 100
+  batch_size: 512
+  lr_head: 0.02
+  lr_extractor: 0.002
+  weight_decay: 0.000001
+  extractor: 'mobilenetv3s'
+  extractor_weights: 'B:/Downloads/epoch=9-step=6020.ckpt'
+  augment_pipeline: "supervised"
+  k_folds: 10
+  n_splits_label_eff: 20
+  obj_det: 
+    min_ratio: 0.023 #0.023
+    max_ratio: 0.17 #0.17
+    aspect_ratios: [2.0, 3.0, 4.0, 5.0]
+  augmentation:
+    convert_all_to_linear: false

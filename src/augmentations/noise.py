@@ -1,3 +1,4 @@
+import random
 from typing import Optional, List
 
 import numpy as np
@@ -74,6 +75,8 @@ class SpeckleNoise(nn.Module):
 
         x1, y1, x2, y2, x3, y3, x4, y4 = keypoints
         c, h, w = image.shape
+        device = keypoints.get_device()
+        device = 'cpu' if device == -1 else device
 
         # Determine number of x-, y-values for sample points
         lateral_res = (self.min_lateral_res + torch.rand(()) * (self.max_lateral_res - self.min_lateral_res)).int()
@@ -94,17 +97,18 @@ class SpeckleNoise(nn.Module):
             if self.square_roi:
                 # If keypoints are off-screen, shift and scale image so that they
                 # are on-screen and comprise the left and right bounds.
-                resize_w = torch.floor(2 * torch.sqrt((h - y_itn) ** 2 - (y3 - y_itn) ** 2))
+                resize_w = torch.floor(2 * torch.sqrt(torch.abs((h - y_itn) ** 2 - (y3 - y_itn) ** 2)))
                 w = resize_w.int()
                 x3 = x3 * w / h
                 x4 = x4 * w / h
                 x_itn = x_itn * w / h
+
                 image = tvf.resize(image, [h, w])
             bot_r = torch.sqrt((x3 - x_itn) ** 2 + (y3 - y_itn) ** 2)
 
             theta = get_angle_of_intersection(x3, y3, x4, y4, x_itn, y_itn)
-            phis = torch.linspace(-theta / 2, theta / 2, lateral_res)
-            rads = torch.linspace(y1, bot_r, axial_res)
+            phis = torch.linspace(-theta / 2, theta / 2, lateral_res, device=device)
+            rads = torch.linspace(y1, bot_r, axial_res, device=device)
             rr, pp = torch.meshgrid(rads, phis, indexing='ij')
             xx = x_itn + rr * torch.sin(pp)
             yy = y_itn + rr * torch.cos(pp)
@@ -126,23 +130,23 @@ class SpeckleNoise(nn.Module):
 
         # Interpolate new image based on noisy intensity at sample points (Step 3)
         if probe == Probe.LINEAR.value:
-            y_coords = torch.linspace(-1., 1., h)
-            x_coords = torch.linspace(-1., 1., w)
+            y_coords = torch.linspace(-1., 1., h, device=device)
+            x_coords = torch.linspace(-1., 1., w, device=device)
             out_yy, out_xx = torch.meshgrid(y_coords, x_coords, indexing='ij')
         else:
-            y_coords = torch.linspace(0., h - 1., h)
-            x_coords = torch.linspace(0., w - 1., w)
+            y_coords = torch.linspace(0., h - 1., h, device=device)
+            x_coords = torch.linspace(0., w - 1., w, device=device)
             new_yy, new_xx = torch.meshgrid(y_coords, x_coords, indexing='ij')
             out_xx = torch.atan2(new_xx - x_itn, new_yy - y_itn) / theta * 2.
             out_yy = torch.sqrt((x_itn - new_xx) ** 2 + (y_itn - new_yy) ** 2) / bot_r * 2. - 1.
         flow_field = torch.stack([out_xx, out_yy], dim=-1)
-        new_image = nn.functional.grid_sample(img_sampled.unsqueeze(0).float(), flow_field.unsqueeze(0)).squeeze(0)
+        new_image = nn.functional.grid_sample(img_sampled.unsqueeze(0).float(), flow_field.unsqueeze(0), align_corners=False).squeeze(0)
 
         if self.square_roi:
             new_image = tvf.resize(new_image, [h, h])
 
         # Clamp pixel intensities (Step 4)
-        new_image = torch.clamp(new_image, 0., 255.)
+        new_image = torch.clamp(new_image, 0, 255).to(torch.uint8)
         return new_image, label, keypoints, mask, probe
 
 
@@ -190,15 +194,17 @@ class GaussianNoise(nn.Module):
         Returns:
             augmented image, label, keypoints, mask, probe type
         """
+        device = image.get_device()
+        device = 'cpu' if device == -1 else device
 
         # Sample Gaussian noise to be added to each pixel in the ultrasound beam
         sigma = self.min_sigma + torch.rand(()) * (self.max_sigma - self.min_sigma)
-        noise = sigma * torch.randn_like(mask)
+        noise = (sigma * torch.randn(*mask.shape)).to(device)
         noise = noise * mask
 
         # Add the Gaussian noise to the image
         new_image = image + noise
-        new_image = torch.clamp(new_image, 0., 255.)
+        new_image = torch.clamp(new_image, 0., 255.).to(torch.uint8)
         return new_image, label, keypoints, mask, probe
 
 
@@ -256,8 +262,8 @@ class SaltAndPepperNoise(nn.Module):
 
         # Determine the number of pixels to shade white and black
         c, h, w = image.shape
-        n_salt = int((self.min_salt_frac + torch.rand(()) * (self.max_salt_frac - self.min_salt_frac)) * h * w)
-        n_pepper = int((self.min_pepper_frac + torch.rand(()) * (self.max_pepper_frac - self.min_pepper_frac)) * h * w)
+        n_salt = random.randint(int(h * w * self.min_salt_frac), int(h * w * self.max_salt_frac))
+        n_pepper = random.randint(int(h * w * self.min_pepper_frac), int(h * w * self.max_pepper_frac))
 
         # Add salt noise
         salt_locs = torch.randint(0, w * h - 1, size=(n_salt,))
@@ -267,7 +273,7 @@ class SaltAndPepperNoise(nn.Module):
         pepper_locs = torch.randint(0, w * h - 1, size=(n_pepper,))
         image[:, pepper_locs // w, pepper_locs % w] = 0.
 
-        new_image = image * mask    # Only apply noise to the ultrasound beam
+        new_image = (image * mask).to(torch.uint8)    # Only apply noise to the ultrasound beam
         return new_image, label, keypoints, mask, probe
 
 class WaveletDenoise(nn.Module):
@@ -276,7 +282,8 @@ class WaveletDenoise(nn.Module):
             wavelet_names: Optional[List[str]] = None,
             j: int = 3,
             j_0: int = 2,
-            alpha: float = 3.0
+            min_alpha: float = 2.5,
+            max_alpha: float = 3.5
     ):
         """Initializes the Wavelet Denoise layer.
 
@@ -285,22 +292,24 @@ class WaveletDenoise(nn.Module):
                 names in the pywavelets package
             j: Number of levels of wavelet decomposition
             j_0: Decomposition level for Birgé-Massart thresholding strategy
-            alpha: Scaling factor for Birgé-Massart thresholding strategy
+            min_alpha: Minimum scaling factor for Birgé-Massart thresholding strategy
+            max_alpha: Maximum scaling factor for Birgé-Massart thresholding strategy
         """
         assert j > 0, "j must be >= 0"
         assert j_0 < j, "j_0 must be a valid decomposition level < j"
-        assert alpha > 1., "alpha must be >= 1"
+        assert 1. <= min_alpha <= max_alpha, "alpha must be >= 1"
 
         super(WaveletDenoise, self).__init__()
 
         self.j = j
         self.j_0 = j_0
-        self.alpha = alpha
+        self.min_alpha = min_alpha
+        self.max_alpha = max_alpha
 
         if wavelet_names is not None:
             self.wavelet_names = wavelet_names
         else:
-            self.wavelet_names = ["db2", "db5", "db30"]
+            self.wavelet_names = ["db2", "db5"]
 
         self.forward_dwts = []
         self.inverse_dwts = []
@@ -334,13 +343,16 @@ class WaveletDenoise(nn.Module):
             augmented image, label, keypoints, mask, probe type
         """
 
-        # Determine the number of pixels to shade white and black
+        # Randomly select mother wavelet and thresholding level
         idx = np.random.randint(0, len(self.wavelet_names))
+        alpha = random.uniform(self.min_alpha, self.max_alpha)
+
+        # Apply forward wavelet transform
         yl, yh = self.forward_dwts[idx](image.unsqueeze(0).float())
 
         m = yh[-1].shape[-1] * yh[-1].shape[-2] / 2
         for i in range(self.j_0):
-            thresh = m / (self.j_0 + 1 - i) ** self.alpha
+            thresh = m / (self.j_0 + 1 - i) ** alpha
             yh[i] = torch.sign(yh[i]) * torch.clamp(torch.abs(yh[i]) - thresh, min=0.)
 
         new_image = (self.inverse_dwts[idx]((yl, yh))).squeeze(0)
